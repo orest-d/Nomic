@@ -1,0 +1,43 @@
+keyword keyword
+keyword token
+keyword rule
+keyword group
+keyword ignore
+keyword option           "?"
+keyword PositionMark     "@"
+keyword binary
+keyword on
+ignore  /#.*/
+ignore  /[\\n\\r]/
+
+token   string           /"[^"\\\\\\r\\n]*(?:\\\\.[^"\\\\\\r\\n]*)*"/  
+token   regex            "/.*/"                                        
+token   identifier       /[a-zA-Z_][a-zA-Z0-9_]*/                      
+
+rule    NamedObject(name:identifier)
+rule    ClassGenerator(name:identifier)
+
+rule    KeywordStatement(@keyword, name:identifier, KeywordParameters?)
+rule    KeywordParameters(@string, regex:StringRegex?)
+group   StringRegex(string, regex)
+
+rule    TokenStatement(@token, name:identifier, regex:StringRegex,test:string*)
+
+rule    IgnoreStatement(@ignore, regex:StringRegex)
+rule    RuleStatement(@rule,name:identifier, "(", sequence:RuleElement*(","), ")")
+group   RuleElement(StringRuleElement,PatternRuleElement)
+
+rule    Register(@"!",identifier)
+rule    StringRuleElement(PositionMark?, @string, option?)
+rule    PatternRuleElement(PositionMark?, @name:identifier, ElementReference?, multiplicity?, register?)
+rule    ElementReference(@":",name:identifier)
+rule    SplitBy("(", @string, ")")
+rule    OneOrMore(@"+",SplitBy?)
+rule    More(@"*",SplitBy?)
+group   Multiplicity(Option,OneOrMore,More)
+
+rule    BinaryStatement(@binary,name:identifier,on,operand:identifier,"(",sequence:identifier+(","), ")")
+rule    GroupStatement(@Group, name:identifier, "(",sequence:identifier+(","), ")")
+
+group   Statement(TokenStatement,KeywordStatement, RuleStatement, GroupStatement, IgnoreStatement, BinaryStatement)
+rule    Main(sequence:Statement*)
