@@ -24,6 +24,14 @@ class ASTObject extends Positional{
     case Some(x) =>  if (x.getClass()==classManifest[T].erasure) Some(x.asInstanceOf[T]) else x.ancestor[T]         
     case None => None
   }
+  def ancestorOrSelf[T : ClassManifest]():Option[T] =  {
+    if (this.getClass()==classManifest[T].erasure){
+      Some(this.asInstanceOf[T])
+    }
+    else{
+      ancestor[T]
+    }
+  }
 }
 
 class Literal(val literal:String) extends ASTObject{
@@ -38,4 +46,8 @@ class AGroup(val groupContent:ASTObject) extends ASTObject{
 case class AList[T<:ASTObject](val list:List[T]) extends ASTObject{
   list.foreach(_.parent=Option(this))
   override def toString = list.toString
+}
+
+class ABinary[A <: ASTObject](val left:A,val right:A) extends ASTObject{
+  override def toString = s"Binary($left, $right)"
 }

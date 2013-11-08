@@ -15,14 +15,15 @@ This file is part of Scala Nomic Meno.
     along with Scala Nomic Meno.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-package eu.lateral.nomic.meno.parsertranslator;
+package eu.lateral.nomic.meno.parsertranslator
 
 import eu.lateral.nomic.meno.Util
 import eu.lateral.nomic.meno.ot
 import eu.lateral.nomic.meno.ast._
 import eu.lateral.nomic.ObjectTranslators
-import ObjectTranslators.{OT, StringOT, Translator}
+import ObjectTranslators.{ OT, StringOT, Translator }
 import eu.lateral.nomic.ASTObjects.ASTObject
+import eu.lateral.nomic.errors.PositionError
 
 object ASTStringT extends ASTStringT(new ObjectTranslators.IdentityOT[ASTString])
 
@@ -31,25 +32,35 @@ class ASTStringT[T](first: ObjectTranslators.OT[T, ASTString]) extends ot.ASTStr
   def translate = value
 }
 
-
 object ASTRegexT extends ASTRegexT(new ObjectTranslators.IdentityOT[ASTRegex])
 
 class ASTRegexT[T](first: ObjectTranslators.OT[T, ASTRegex]) extends ot.ASTRegexOT(first) {
 
-  def translate = value/(x => "\""+x.substring(1,x.length-1).replace("\"","\\\"")+"\"")
+  def translate = value / (x => "\"" + x.substring(1, x.length - 1).replace("\"", "\\\"") + "\"")
 }
-
 
 object IdentifierT extends IdentifierT(new ObjectTranslators.IdentityOT[Identifier])
 
-class IdentifierT[T](first: ObjectTranslators.OT[T, Identifier]) extends ot.IdentifierOT(first) with Util{
+class IdentifierT[T](first: ObjectTranslators.OT[T, Identifier]) extends ot.IdentifierOT(first) with Util {
 
   def translate = value
   def insideGroup = format("%-20s ^^ (%s(_ :ASTObjects.ASTObject))",
     value.refname,
-    (ancestor[GroupStatement].get/GroupStatementT.name.T.objname).str)
-}
+    (ancestor[GroupStatement].get / GroupStatementT.name.T.objname).str)
 
+    def binaryName = this / { x =>
+    {
+      x.ancestor[BinaryStatement] match {
+        case Some(bs) => bs.name.value
+        case None => throw PositionError(s"Identifier ${x.value} not in binary", x.pos)
+      }
+    }
+  }
+
+  def binaryOperatorObjectName = binaryName.T.objname + value.T.objname
+  def binaryCasePattern = format("%s ~ right",value.T.objname)
+  def binaryCase = format("        case %-20s => %s(%s(left,%s(right)))",binaryCasePattern,binaryName.T.objname,binaryOperatorObjectName,binaryName.T.objname)
+}
 
 object NamedObjectT extends NamedObjectT(new ObjectTranslators.IdentityOT[NamedObject])
 
@@ -58,7 +69,6 @@ class NamedObjectT[T](first: ObjectTranslators.OT[T, NamedObject]) extends ot.Na
   def translate = name.T
 }
 
-
 object ClassGeneratorT extends ClassGeneratorT(new ObjectTranslators.IdentityOT[ClassGenerator])
 
 class ClassGeneratorT[T](first: ObjectTranslators.OT[T, ClassGenerator]) extends ot.ClassGeneratorOT(first) {
@@ -66,31 +76,26 @@ class ClassGeneratorT[T](first: ObjectTranslators.OT[T, ClassGenerator]) extends
   def translate = name.T
 }
 
-
 object KeywordStatementT extends KeywordStatementT(new ObjectTranslators.IdentityOT[KeywordStatement])
 
-class KeywordStatementT[T](first: ObjectTranslators.OT[T, KeywordStatement]) extends ot.KeywordStatementOT(first) with Util{
+class KeywordStatementT[T](first: ObjectTranslators.OT[T, KeywordStatement]) extends ot.KeywordStatementOT(first) with Util {
 
   def translate = format("def %-18s = %s ^^ (_ => %s)\n\n",
     name.T.refname,
     keywordParameters.ifDefinedOrElse(
       keywordParameters.get.T,
-      format("""literal("%s")""",name.T)),
-    name.T.objname
-  )
+      format("""literal("%s")""", name.T)),
+    name.T.objname)
 }
-
 
 object KeywordParametersT extends KeywordParametersT(new ObjectTranslators.IdentityOT[KeywordParameters])
 
 class KeywordParametersT[T](first: ObjectTranslators.OT[T, KeywordParameters]) extends ot.KeywordParametersOT(first) {
 
   def translate = o_regex.ifDefinedOrElse(
-    format("regex(%sr)",o_regex.get.T),
-    format("literal(%s)",string.value)
-  )
+    format("regex(%sr)", o_regex.get.T),
+    format("literal(%s)", string.value))
 }
-
 
 object StringRegexT extends StringRegexT(new ObjectTranslators.IdentityOT[StringRegex])
 
@@ -100,26 +105,24 @@ class StringRegexT[T](first: ObjectTranslators.OT[T, StringRegex]) extends ot.St
     o_regex.T("")
 }
 
-
 object TokenStatementT extends TokenStatementT(new ObjectTranslators.IdentityOT[TokenStatement])
 
-class TokenStatementT[T](first: ObjectTranslators.OT[T, TokenStatement]) extends ot.TokenStatementOT(first) with Util{
+class TokenStatementT[T](first: ObjectTranslators.OT[T, TokenStatement]) extends ot.TokenStatementOT(first) with Util {
 
-  def translate = format("def %-18s = positioned(regex(%sr) ^^ {%s(_:String)})\n\n",name.T.refname, o_regex.T,name.T.objname)
+  def translate = format("def %-18s = positioned(regex(%sr) ^^ {%s(_:String)})\n\n", name.T.refname, o_regex.T, name.T.objname)
 }
-
 
 object IgnoreStatementT extends IgnoreStatementT(new ObjectTranslators.IdentityOT[IgnoreStatement])
 
 class IgnoreStatementT[T](first: ObjectTranslators.OT[T, IgnoreStatement]) extends ot.IgnoreStatementOT(first) {
 
   def translate = C("")
+  def pattern = o_regex.T / (x => "(" + x.substring(1, x.length - 1).replace("\"", "\\\"") + ")")
 }
-
 
 object RuleStatementT extends RuleStatementT(new ObjectTranslators.IdentityOT[RuleStatement])
 
-class RuleStatementT[T](first: ObjectTranslators.OT[T, RuleStatement]) extends ot.RuleStatementOT(first) with Util{
+class RuleStatementT[T](first: ObjectTranslators.OT[T, RuleStatement]) extends ot.RuleStatementOT(first) with Util {
 
   def translate = format(
     """|def %-18s : Parser[%s] = positioned(
@@ -135,18 +138,16 @@ class RuleStatementT[T](first: ObjectTranslators.OT[T, RuleStatement]) extends o
     sequence.map(RuleElementT.argument).join(", "))
 }
 
-
 object RuleElementT extends RuleElementT(new ObjectTranslators.IdentityOT[RuleElement])
 
 class RuleElementT[T](first: ObjectTranslators.OT[T, RuleElement]) extends ot.RuleElementOT(first) with Util {
 
   def translate = stringRuleElement.T("") +
     patternRuleElement.T("")
-  def pattern = stringRuleElement.ifDefinedOrElse(C("_"),C("")) +
-                patternRuleElement.ifDefinedOrElse(patternRuleElement.get.name.T.refname,C(""))
-  def argument= patternRuleElement.ifDefinedOrElse(patternRuleElement.get/PatternRuleElementT.argument.T,C(""))
+  def pattern = stringRuleElement.ifDefinedOrElse(C("_"), C("")) +
+    patternRuleElement.ifDefinedOrElse(patternRuleElement.get.name.T.refname, C(""))
+  def argument = patternRuleElement.ifDefinedOrElse(patternRuleElement.get / PatternRuleElementT.argument.T, C(""))
 }
-
 
 object RegisterT extends RegisterT(new ObjectTranslators.IdentityOT[Register])
 
@@ -155,7 +156,6 @@ class RegisterT[T](first: ObjectTranslators.OT[T, Register]) extends ot.Register
   def translate = C("!") + identifier.T
 }
 
-
 object StringRuleElementT extends StringRuleElementT(new ObjectTranslators.IdentityOT[StringRuleElement])
 
 class StringRuleElementT[T](first: ObjectTranslators.OT[T, StringRuleElement]) extends ot.StringRuleElementOT(first) {
@@ -163,36 +163,30 @@ class StringRuleElementT[T](first: ObjectTranslators.OT[T, StringRuleElement]) e
   def translate = string.T
 }
 
-
 object PatternRuleElementT extends PatternRuleElementT(new ObjectTranslators.IdentityOT[PatternRuleElement])
 
-class PatternRuleElementT[T<:ASTObject](first: ObjectTranslators.OT[T, PatternRuleElement]) extends ot.PatternRuleElementOT(first) with Util{
+class PatternRuleElementT[T <: ASTObject](first: ObjectTranslators.OT[T, PatternRuleElement]) extends ot.PatternRuleElementOT(first) with Util {
 
-  def translate = multiplicity.ifDefinedOrElse(multiplicity.get.T,reference)
+  def translate = multiplicity.ifDefinedOrElse(multiplicity.get.T, reference)
   def reference = ref.refname
-  def ref=elementReference.ifDefinedOrElse(elementReference.get.T,name.T)
-  def basicElementType=ref.objname
-  def argument = find(ref).getOrFail(format("Reference %s not found",ref),pos).keywordStatement.ifDefinedOrElse(
+  def ref = elementReference.ifDefinedOrElse(elementReference.get.T, name.T)
+  def basicElementType = ref.objname
+  def argument = find(ref).getOrFail(format("Reference %s not found", ref), pos).keywordStatement.ifDefinedOrElse(
     multiplicity.ifDefinedOrElse(
       multiplicity.get.option.ifTrueElse(
         name.T.refname + C(" isDefined"),
-        C("")
-      ),
-      C("")
-    ),
-    name.T.refname
-  )
+        C("")),
+      C("")),
+    name.T.refname)
 
 }
-
 
 object ElementReferenceT extends ElementReferenceT(new ObjectTranslators.IdentityOT[ElementReference])
 
-class ElementReferenceT[T](first: ObjectTranslators.OT[T, ElementReference]) extends ot.ElementReferenceOT(first) with Util{
+class ElementReferenceT[T](first: ObjectTranslators.OT[T, ElementReference]) extends ot.ElementReferenceOT(first) with Util {
 
   def translate = name.T.refname
 }
-
 
 object SplitByT extends SplitByT(new ObjectTranslators.IdentityOT[SplitBy])
 
@@ -201,63 +195,71 @@ class SplitByT[T](first: ObjectTranslators.OT[T, SplitBy]) extends ot.SplitByOT(
   def translate = string.T
 }
 
-
 object OneOrMoreT extends OneOrMoreT(new ObjectTranslators.IdentityOT[OneOrMore])
 
-class OneOrMoreT[T](first: ObjectTranslators.OT[T, OneOrMore]) extends ot.OneOrMoreOT(first) with Util{
+class OneOrMoreT[T](first: ObjectTranslators.OT[T, OneOrMore]) extends ot.OneOrMoreOT(first) with Util {
 
   def translate = splitBy.ifDefinedOrElse(
-    format("rep1sep(%s,%s)",ancestor[PatternRuleElement].get/PatternRuleElementT.reference.T,splitBy.T("")),
-    format("rep1(%s)",ancestor[PatternRuleElement].get/PatternRuleElementT.reference.T)
-  )
+    format("rep1sep(%s,%s)", ancestor[PatternRuleElement].get / PatternRuleElementT.reference.T, splitBy.T("")),
+    format("rep1(%s)", ancestor[PatternRuleElement].get / PatternRuleElementT.reference.T))
 }
-
 
 object MoreT extends MoreT(new ObjectTranslators.IdentityOT[More])
 
-class MoreT[T](first: ObjectTranslators.OT[T, More]) extends ot.MoreOT(first) with Util{
+class MoreT[T](first: ObjectTranslators.OT[T, More]) extends ot.MoreOT(first) with Util {
 
   def translate = splitBy.ifDefinedOrElse(
-    format("repsep(%s,%s)",ancestor[PatternRuleElement].get/PatternRuleElementT.reference.T,splitBy.T("")),
-    format("rep(%s)",ancestor[PatternRuleElement].get/PatternRuleElementT.reference.T)
-  )
+    format("repsep(%s,%s)", ancestor[PatternRuleElement].get / PatternRuleElementT.reference.T, splitBy.T("")),
+    format("rep(%s)", ancestor[PatternRuleElement].get / PatternRuleElementT.reference.T))
 }
-
 
 object MultiplicityT extends MultiplicityT(new ObjectTranslators.IdentityOT[Multiplicity])
 
-class MultiplicityT[T<:ASTObject](first: ObjectTranslators.OT[T, Multiplicity]) extends ot.MultiplicityOT(first) with Util {
+class MultiplicityT[T <: ASTObject](first: ObjectTranslators.OT[T, Multiplicity]) extends ot.MultiplicityOT(first) with Util {
 
   def translate = option.ifTrueElse(
-      format("opt(%s)",ancestor[PatternRuleElement].get/PatternRuleElementT.reference.T),
-      C("")
-    ).str +
+    format("opt(%s)", ancestor[PatternRuleElement].get / PatternRuleElementT.reference.T),
+    C("")).str +
     oneOrMore.T("") +
     more.T("")
 }
 
-
 object BinaryStatementT extends BinaryStatementT(new ObjectTranslators.IdentityOT[BinaryStatement])
 
-class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) extends ot.BinaryStatementOT(first) {
+class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) extends ot.BinaryStatementOT(first) with Util{
 
-  def translate = C("//binary") + name.T + C("on") + operand.T + C("(") + sequence.join(",") + C(")")
+  def pattern = format("%s ~ rep((%s) ~ %s)",operand.T.refname.A,sequence.map(IdentifierT.T.refname).join(" | "),operand.T.refname.A)
+  //def translate = C("//binary") + name.T + C("on") + operand.T + C("(") + sequence.join(",") + C(")")
+  def translate = format(
+      """|def %-18s = positioned(%s ^^ {
+         |  arg => {
+         |    val (first ~ list) = arg
+         |    list.foldLeft(%s(first)){
+         |      (left: %s, oright) => oright match{
+         |%s
+         |      }
+         |    }
+         |  }
+         |})""".stripMargin,
+         name.T.refname.A,
+         pattern,
+         name.T.objname.A,
+         name.T.objname.A,
+         sequence.map(IdentifierT.binaryCase).join("\n"))
 }
-
 
 object GroupStatementT extends GroupStatementT(new ObjectTranslators.IdentityOT[GroupStatement])
 
-class GroupStatementT[T](first: ObjectTranslators.OT[T, GroupStatement]) extends ot.GroupStatementOT(first) with Util{
+class GroupStatementT[T](first: ObjectTranslators.OT[T, GroupStatement]) extends ot.GroupStatementOT(first) with Util {
 
   //def translate = C("Group") + name.T + C("(") + sequence.join(",") + C(")") +
   def translate = format("""|def %-18s = positioned(
                             |                           %s
                             |                         )
                             |""".stripMargin,
-        name.T.refname,
-        sequence.map(IdentifierT.insideGroup).join(" |\n                           "))
+    name.T.refname,
+    sequence.map(IdentifierT.insideGroup).join(" |\n                           "))
 }
-
 
 object StatementT extends StatementT(new ObjectTranslators.IdentityOT[Statement])
 
@@ -271,11 +273,16 @@ class StatementT[T](first: ObjectTranslators.OT[T, Statement]) extends ot.Statem
     binaryStatement.T("")
 }
 
-
 object MainT extends MainT(new ObjectTranslators.IdentityOT[Main])
 
-class MainT[T](first: ObjectTranslators.OT[T, Main]) extends ot.MainOT(first) {
+class MainT[T](first: ObjectTranslators.OT[T, Main]) extends ot.MainOT(first) with Util {
 
+  def ignores = this / { (t, o) =>
+    {
+      val patterns = for (ignore <- findAllIgnores(o)) yield IgnoreStatementT.pattern(t,ignore)
+      patterns.mkString("|")
+    }
+  }
   def translate = format("""package %s.parser
 
 import java.io.File
@@ -288,6 +295,15 @@ import eu.lateral.nomic.ASTObjects
 
 object Parser extends RegexParsers{
   override def skipWhitespace = true
+  override val whiteSpace = %s%s%s.r
+  override def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int =
+    if (skipWhitespace)
+      (whiteSpace findPrefixMatchOf (source.subSequence(offset, source.length))) match {
+        case Some(matched) => handleWhiteSpace(source,offset + matched.end)
+        case None => offset
+      }
+    else
+      offset
 %s
   def apply(txt:String)={
     phrase(main)(new CharArrayReader(txt.toArray)) match{
@@ -308,9 +324,8 @@ object Parser extends RegexParsers{
   }
 }
 
-""",translatorProperty("package"),translatorProperty("package"),sequence.join("\n \n").indent)
+""", translatorProperty("package"), translatorProperty("package"), C("\"\"\""), ignores, C("\"\"\""), sequence.join("\n \n").indent)
 }
-
 
 class ParserTranslator extends ObjectTranslators.TranslatorWithProperties {
 
@@ -352,8 +367,8 @@ object TranslatorTest {
   }
 
   def test {
-    val ast=eu.lateral.nomic.meno.parser.Parser.fromFile("/home/orest/zlos/MenoScala/scala-nomic-meno/src/main/resources/meno.meno")
-    println("AST:  "+ast)
-    println("TRANS:"+(new ParserTranslator).apply(ast))
+    val ast = eu.lateral.nomic.meno.parser.Parser.fromFile("src/main/resources/meno.meno")
+    println("AST:  " + ast)
+    println("TRANS:" + (new ParserTranslator).apply(ast))
   }
 }

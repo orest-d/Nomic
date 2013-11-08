@@ -56,6 +56,14 @@ trait Util{
     for (main <- obj.ancestor[Main];obj<-nsMap(main).get(name)) yield obj
   }
 
+  def findAllIgnores(obj:ASTObject):List[IgnoreStatement]={
+    for (
+      main <- obj.ancestorOrSelf[Main].toList ;
+      statement <- main.sequence.list ;
+      ignore <- statement.ignoreStatement 
+    ) yield  ignore
+  }
+  
   def findKeyword(obj:ASTObject,name:String):Option[KeywordStatement]={
     for (
       main <- obj.ancestor[Main].toList ;

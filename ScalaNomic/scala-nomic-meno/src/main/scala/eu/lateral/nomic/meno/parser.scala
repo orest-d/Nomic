@@ -27,6 +27,16 @@ import eu.lateral.nomic.ASTObjects
 
 object Parser extends RegexParsers{
   override def skipWhitespace = true
+  override val whiteSpace = """(\s+)|(#.*)""".r
+  override def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int =
+    if (skipWhitespace)
+      (whiteSpace findPrefixMatchOf (source.subSequence(offset, source.length))) match {
+        case Some(matched) => handleWhiteSpace(source,offset + matched.end)
+        case None => offset
+      }
+    else
+      offset
+  
   def keyword            = literal("keyword") ^^ (_ => Keyword)
 
   def token              = literal("token") ^^ (_ => Token)

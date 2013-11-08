@@ -22,6 +22,7 @@ import eu.lateral.nomic.meno.ast._
 import eu.lateral.nomic.ObjectTranslators
 import ObjectTranslators.{OT, StringOT, Translator}
 import eu.lateral.nomic.ASTObjects.ASTObject
+import eu.lateral.nomic.errors.PositionError
 
 object ASTStringT extends ASTStringT(new ObjectTranslators.IdentityOT[ASTString])
 
@@ -49,7 +50,7 @@ class IdentifierT[T<:ASTObject](first: ObjectTranslators.OT[T, Identifier]) exte
   def groupMember=referenced.ifDefinedOrElse(
     format(
       """
-        | def %-20s = new %s(
+        |  def %-20s = new %s(
         |                              this/((_:%s).%s)%s
         |                            )
         |""".stripMargin,
@@ -61,6 +62,46 @@ class IdentifierT[T<:ASTObject](first: ObjectTranslators.OT[T, Identifier]) exte
     ),
     C("")
   )
+  def binaryName = this / { x =>
+    {
+      x.ancestor[BinaryStatement] match {
+        case Some(bs) => bs.name.value
+        case None => throw PositionError(s"Identifier ${x.value} not in binary", x.pos)
+      }
+    }
+  }
+  def binaryOperand = this / { x =>
+    {
+      x.ancestor[BinaryStatement] match {
+        case Some(bs) => bs.operand.value
+        case None => throw PositionError(s"Identifier ${x.value} not in binary", x.pos)
+      }
+    }
+  }
+
+  def binaryOperatorObjectName = binaryName.T.objname + value.T.objname
+  def binaryGroupAttribute = format(
+      """|def %s = new ObjectTranslators.ChainingOptionOT(
+         |  this/((_:%s).%s),
+         |  (c:ObjectTranslators.OT[T,%s])=>new %s[T](c))
+         |def %s = %s
+         |""".stripMargin,
+         binaryOperatorObjectName.refname,
+         binaryName.T.objname,
+         binaryOperatorObjectName.refname,
+         binaryOperatorObjectName.T.objname,
+         binaryOperatorObjectName.T.otname,
+         value.T.refname,
+         binaryOperatorObjectName.refname)
+  def binaryOT = format("class %s[T](first:ObjectTranslators.OT[T,%s]) extends ObjectTranslators.BinaryOT[T,%s,%s,%s[T]](first,x => new %s(x))\n\n",
+      binaryOperatorObjectName.otname,  // OT
+      binaryOperatorObjectName.objname, // Binary AST entering through first OT
+      binaryOperatorObjectName.objname, // Binary AST - Binary OT parameter
+      binaryName.objname,               // Binary AST operates on operand, which is a binary expression            
+      binaryName.otname,                // Binary AST factory creates an OT on a binary expression
+      binaryName.otname                 // Binary AST factory creates an OT on a binary expression - here the object is created
+      )         
+  
 /*
   def insideGroup = format("%-20s ^^ (%s(_ :ASTObjects.ASTObject))",
     value.refname,
@@ -262,9 +303,24 @@ class MultiplicityT[T <: ASTObject](first: ObjectTranslators.OT[T, Multiplicity]
 
 object BinaryStatementT extends BinaryStatementT(new ObjectTranslators.IdentityOT[BinaryStatement])
 
-class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) extends ot.BinaryStatementOT(first) {
-
-  def translate = C("//binary") + name.T + C("on") + operand.T + C("(") + sequence.join(",") + C(")")
+class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) extends ot.BinaryStatementOT(first) with Util{
+  def group = format(
+      """|class %s[T](first:ObjectTranslators.OT[T,%s]) extends ObjectTranslators.ASTObjectOT(first){
+         |  def %s = new ObjectTranslators.ChainingOptionOT(
+         |    this/((_:%s).%s),
+         |    (c:ObjectTranslators.OT[T,%s])=>new %s[T](c))
+         |%s
+         |}""".stripMargin,
+         name.T.otname,
+         name.T.objname,
+         operand.T.refname,
+         name.T.objname,
+         operand.T.refname,
+         operand.T.objname,
+         operand.T.otname,
+         sequence.map(IdentifierT.binaryGroupAttribute.indent).join("\n"))
+  def subOTs = sequence.map(IdentifierT.binaryOT).join 
+  def translate = subOTs + group
 }
 
 

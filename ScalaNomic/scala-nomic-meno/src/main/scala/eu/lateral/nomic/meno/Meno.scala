@@ -110,8 +110,8 @@ object Meno {
       createSource(new ParserTranslator,"parser")
       createSource(new OTTranslator,"ot")
       createSource(new ToDefaultTranslator,"defaulttranslator")
-      createSource(new ToPrologGenerator,"prologgenerator")
-      createFile(new PrologGenerator,"metadescription.pl" )
+      //createSource(new ToPrologGenerator,"prologgenerator")
+      //createFile(new PrologGenerator,"metadescription.pl" )
     }
   }
 }

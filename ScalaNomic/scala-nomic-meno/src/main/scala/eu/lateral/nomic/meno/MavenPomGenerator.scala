@@ -17,13 +17,6 @@ This file is part of Scala Nomic Meno.
 
 package eu.lateral.nomic.meno
 
-/**
- * Created with IntelliJ IDEA.
- * User: orest
- * Date: 9/24/12
- * Time: 10:03 PM
- * To change this template use File | Settings | File Templates.
- */
 object MavenPomGenerator {
 
   def generatePom(groupId:String,artifactId:String,packagename:String)=
@@ -35,7 +28,7 @@ object MavenPomGenerator {
       |  <version>1.0-SNAPSHOT</version>
       |  <name>${project.artifactId}</name>
       |  <description>My wonderfull meno-DSL</description>
-      |  <inceptionYear>2010</inceptionYear>
+      |  <inceptionYear>2013</inceptionYear>
       |  <licenses>
       |    <license>
       |      <name>My License</name>
@@ -48,7 +41,7 @@ object MavenPomGenerator {
       |    <maven.compiler.source>1.5</maven.compiler.source>
       |    <maven.compiler.target>1.5</maven.compiler.target>
       |    <encoding>UTF-8</encoding>
-      |    <scala.version>2.8.0</scala.version>
+      |    <scala.version>2.10.0</scala.version>
       |  </properties>
       |
       |<!--
@@ -89,19 +82,19 @@ object MavenPomGenerator {
       |    <dependency>
       |      <groupId>junit</groupId>
       |      <artifactId>junit</artifactId>
-      |      <version>4.8.1</version>
+      |      <version>4.11</version>
       |      <scope>test</scope>
       |    </dependency>
       |    <dependency>
       |      <groupId>org.scala-tools.testing</groupId>
-      |      <artifactId>specs_${scala.version}</artifactId>
-      |      <version>1.6.5</version>
+      |      <artifactId>specs_2.10</artifactId>
+      |      <version>1.6.9</version>
       |      <scope>test</scope>
       |    </dependency>
       |    <dependency>
       |      <groupId>org.scalatest</groupId>
-      |      <artifactId>scalatest</artifactId>
-      |      <version>1.2</version>
+      |      <artifactId>scalatest_2.10</artifactId>
+      |      <version>2.0.M5b</version>
       |      <scope>test</scope>
       |    </dependency>
       |  </dependencies>
@@ -111,22 +104,15 @@ object MavenPomGenerator {
       |    <testSourceDirectory>src/test/scala</testSourceDirectory>
       |    <plugins>
       |      <plugin>
-      |        <groupId>org.scala-tools</groupId>
-      |        <artifactId>maven-scala-plugin</artifactId>
-      |        <version>2.15.0</version>
+      |        <groupId>net.alchim31.maven</groupId>
+      |        <artifactId>scala-maven-plugin</artifactId>
+      |        <version>3.1.6</version>
       |        <executions>
       |          <execution>
       |            <goals>
       |              <goal>compile</goal>
       |              <goal>testCompile</goal>
       |            </goals>
-      |            <configuration>
-      |              <args>
-      |                <arg>-make:transitive</arg>
-      |                <arg>-dependencyfile</arg>
-      |                <arg>${project.build.directory}/.scala_dependencies</arg>
-      |              </args>
-      |            </configuration>
       |          </execution>
       |        </executions>
       |        <configuration>

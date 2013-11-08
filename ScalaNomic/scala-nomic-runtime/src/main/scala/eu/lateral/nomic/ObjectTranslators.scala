@@ -303,6 +303,15 @@ class ListOT[T, E](first: OT[T, List[E]]) extends OT[T, List[E]] {
 
 class IdentityListOT[T] extends ListOT(new IdentityOT[List[T]])
 
+class BinaryOT[
+  In,
+  Operator <: ABinary[Operand],
+  Operand <: ASTObject,
+  OperandOT ] (first:OT[In,Operator],factory:(OT[In,Operand] => OperandOT)) extends ASTObjectOT(first){
+  val left  = factory(this/((_:Operator).left))
+  val right = factory(this/((_:Operator).right))
+} 
+
 class FormatOT[T](format:String,arg:OT[T,Any]*) extends AbstractStringOT[T]{
   override def apply(translator:Translator,obj:T) = format.format(
       (for(f<-arg) yield f(translator,obj)):_*

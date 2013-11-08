@@ -44,4 +44,8 @@ class ASTObjectsSuite extends Assertions{
     val obj= new AList(List(new Literal("a"),new Literal("b")))
     assert(obj.toString==="List(Literal(a), Literal(b))")
   }
+  @Test def testABinary() {
+    val obj= new ABinary(new Literal("a"),new Literal("b"))
+    assert(obj.toString==="Binary(Literal(a), Literal(b))")
+  }
 }

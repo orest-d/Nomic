@@ -21,6 +21,7 @@ import eu.lateral.nomic.meno.{Util, ot}
 import eu.lateral.nomic.meno.ast._
 import eu.lateral.nomic.ObjectTranslators
 import eu.lateral.nomic.ASTObjects.ASTObject
+import eu.lateral.nomic.errors.PositionError
 
 object ASTStringT extends ASTStringT(new ObjectTranslators.IdentityOT[ASTString])
 
@@ -48,6 +49,32 @@ class IdentifierT[T<:ASTObject](first: ObjectTranslators.OT[T, Identifier]) exte
     format("""%s.T("")""",value.refname),
     format("""%s.ifTrueElse("%s","")""",value.refname,value)
   )
+  def binaryName = this / { x =>
+    {
+      x.ancestor[BinaryStatement] match {
+        case Some(bs) => bs.name.value
+        case None => throw PositionError(s"Identifier ${x.value} not in binary", x.pos)
+      }
+    }
+  }
+  def binaryOperatorObjectName = binaryName.T.objname + value.T.objname
+  def binaryTranslation = format(" +\n        %s.T(\"\")",binaryOperatorObjectName.T.refname)  
+  def binaryTranslationClass = format(
+      """|class  %s[T](first:ObjectTranslators.OT[T,%s]) extends ot.%s(first){
+         |
+         |  def translate = left.T + C(" %s ") + right.T
+         |}
+         |""".stripMargin,
+         binaryOperatorObjectName.T.ottname,
+         binaryOperatorObjectName.T.objname,
+         binaryOperatorObjectName.T.otname,
+         value
+         )
+  def binaryIdentity = format("object %s extends %s(new ObjectTranslators.IdentityOT[%s])\n",
+      binaryOperatorObjectName.T.ottname,
+      binaryOperatorObjectName.T.ottname,
+      binaryOperatorObjectName.T.objname)
+  def binaryCase = format("    case x:%-20s => %s.translate(this,x)\n",binaryOperatorObjectName.T.objname,binaryOperatorObjectName.T.otiname)      
 }
 
 object KeywordStatementT extends KeywordStatementT(new ObjectTranslators.IdentityOT[KeywordStatement])
@@ -201,9 +228,28 @@ class MultiplicityT[T <: ASTObject](first: ObjectTranslators.OT[T, Multiplicity]
 
 object BinaryStatementT extends BinaryStatementT(new ObjectTranslators.IdentityOT[BinaryStatement])
 
-class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) extends ot.BinaryStatementOT(first) {
-
-  def translate = C("//binary") + name.T + C("on") + operand.T + C("(") + sequence.join(",") + C(")")
+class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) extends ot.BinaryStatementOT(first) with Util{
+  def group=format(
+      """|class  %s[T](first:ObjectTranslators.OT[T,%s]) extends ot.%s(first){
+         |
+         |  def translate = %s.T("")%s
+         |}
+         |""".stripMargin,
+         name.T.ottname,
+         name.T.objname,
+         name.T.otname,
+         operand.T.refname,
+         sequence.map(IdentifierT.binaryTranslation).join
+         )
+  def groupIdentity = format("object %s extends %s(new ObjectTranslators.IdentityOT[%s])\n",
+      name.T.ottname,
+      name.T.ottname,
+      name.T.objname)
+  def identities = groupIdentity + sequence.map(IdentifierT.binaryIdentity).join
+  def classes = sequence.map(IdentifierT.binaryTranslationClass).join("\n")
+  def groupCase = format("    case x:%-20s => %s.translate(this,x)\n",name.T.objname,name.T.otiname)
+  def cases = groupCase + sequence.map(IdentifierT.binaryCase).join
+  def translate = classes + C("\n") + group
 }
 
 
@@ -246,14 +292,14 @@ class StatementT[T](first: ObjectTranslators.OT[T, Statement]) extends ot.Statem
     tokenStatement.ifDefinedOrElse(singleCase,C("")).str +
     ruleStatement.ifDefinedOrElse(singleCase,C("")).str +
     groupStatement.ifDefinedOrElse(singleCase,C("")).str +
-    binaryStatement.ifDefinedOrElse(binaryStatement.get.name.T,C("")).str
+    binaryStatement.ifDefinedOrElse(binaryStatement.get/BinaryStatementT.cases,C("")).str
   def identityObjectDef = format("object %s extends %s(new ObjectTranslators.IdentityOT[%s])",
     name.T.otiname,name.T.ottname,name.T.objname)
   def identityObject =
     tokenStatement.ifDefinedOrElse(identityObjectDef,C("")).str +
     ruleStatement.ifDefinedOrElse(identityObjectDef,C("")).str +
     groupStatement.ifDefinedOrElse(identityObjectDef,C("")).str +
-    binaryStatement.ifDefinedOrElse(identityObjectDef,C("")).str
+    binaryStatement.ifDefinedOrElse(binaryStatement.get/BinaryStatementT.identities,C("")).str
   def implicitConversionDef =
     format("  implicit def to%s[T](x:OT[T,%s]):%s[T] =\n    new %s(x)",
       name.T.ottname,name.T.objname,name.T.ottname,name.T.ottname

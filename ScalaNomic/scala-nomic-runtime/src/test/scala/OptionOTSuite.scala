@@ -94,7 +94,7 @@ class OptionOTSuite extends Assertions{
       ch.getOrFail(ch.C("message")).toUpperCase(mockedTranslator,None)
     }
     catch{
-      case _ => ()
+      case _:Throwable => ()
     }
     assert(mockedTranslator.msg === "ERROR: message")
 
@@ -116,7 +116,7 @@ class OptionOTSuite extends Assertions{
       ch.getOrFail(ch.C("message"),ch.C(NoPosition)).toUpperCase(mockedTranslator,None)
     }
     catch{
-      case _ => ()
+      case _:Throwable => ()
     }
     assert(mockedTranslator.msg === "ERROR: message <undefined position>")
 

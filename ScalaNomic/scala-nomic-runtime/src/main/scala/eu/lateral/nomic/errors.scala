@@ -19,7 +19,7 @@ package eu.lateral.nomic.errors
 
 import scala.util.parsing.input.Position
 
-abstract class AbstractError{
+abstract class AbstractError extends Throwable{
   def errorMessage:String
 }
 

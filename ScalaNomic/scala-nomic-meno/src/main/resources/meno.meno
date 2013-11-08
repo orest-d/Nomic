@@ -8,7 +8,7 @@ keyword PositionMark     "@"
 keyword binary
 keyword on
 ignore  /#.*/
-ignore  /[\\n\\r]/
+ignore  /\s+/
 
 token   string           /"[^"\\\\\\r\\n]*(?:\\\\.[^"\\\\\\r\\n]*)*"/  
 token   regex            "/.*/"                                        
