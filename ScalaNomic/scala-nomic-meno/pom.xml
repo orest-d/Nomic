@@ -8,6 +8,7 @@
 	<description>Nomic is a set of tools for DSL creation.
 Meno (Meta Nomic) is a main Nomic utility - a code generator which generates a parser, AST objects and a default translator.</description>
 	<inceptionYear>2012</inceptionYear>
+	<url>https://github.com/orest-d/Nomic</url>
 	<licenses>
 		<license>
 			<name>GNU GENERAL PUBLIC LICENSE Version 3</name>
@@ -68,9 +69,6 @@ Meno (Meta Nomic) is a main Nomic utility - a code generator which generates a p
 				<groupId>net.alchim31.maven</groupId>
 				<artifactId>scala-maven-plugin</artifactId>
 				<version>3.1.6</version>
-				<configuration>
-					<recompileMode>incremental</recompileMode>
-				</configuration>
 				<executions>
 					<execution>
 						<goals>
@@ -81,36 +79,15 @@ Meno (Meta Nomic) is a main Nomic utility - a code generator which generates a p
 				</executions>
 				<configuration>
 					<scalaVersion>${scala.version}</scalaVersion>
+					<recompileMode>incremental</recompileMode>
 					<launchers>
 						<launcher>
 							<id>meno</id>
 							<mainClass>eu.lateral.nomic.meno.Meno</mainClass>
 						</launcher>
-						<launcher>
-							<id>todefaulttranslator</id>
-							<mainClass>eu.lateral.nomic.meno.todefaulttranslator.TranslatorTest</mainClass>
-						</launcher>
-						<launcher>
-							<id>ottranslator</id>
-							<mainClass>eu.lateral.nomic.meno.ottranslator.TranslatorTest</mainClass>
-						</launcher>
-						<launcher>
-							<id>parsertranslator</id>
-							<mainClass>eu.lateral.nomic.meno.parsertranslator.TranslatorTest</mainClass>
-						</launcher>
-						<launcher>
-							<id>asttranslator</id>
-							<mainClass>eu.lateral.nomic.meno.asttranslator.TranslatorTest</mainClass>
-						</launcher>
-						<launcher>
-							<id>defaulttranslator</id>
-							<mainClass>eu.lateral.nomic.meno.defaulttranslator.TranslatorTest</mainClass>
-						</launcher>
 					</launchers>
-
 				</configuration>
 			</plugin>
-
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
@@ -151,5 +128,4 @@ Meno (Meta Nomic) is a main Nomic utility - a code generator which generates a p
 			</plugin>
 		</plugins>
 	</build>
-	<url>https://github.com/orest-d/Nomic</url>
 </project>

@@ -7,6 +7,7 @@
 	<name>Scala Nomic Runtime</name>
 	<description>Runtime contains set of libraries and tools used by nomic projects.</description>
 	<inceptionYear>2012</inceptionYear>
+	<url>https://github.com/orest-d/Nomic</url>
 	<licenses>
 		<license>
 			<name>GNU LESSER GENERAL PUBLIC LICENSE Version 3</name>
