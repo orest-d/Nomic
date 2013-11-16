@@ -15,7 +15,7 @@ This file is part of Scala Nomic Meno.
     along with Scala Nomic Meno.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-package eu.lateral.nomic.meno.ast;
+package eu.lateral.nomic.meno.ast
 
 import eu.lateral.nomic.ASTObjects
 

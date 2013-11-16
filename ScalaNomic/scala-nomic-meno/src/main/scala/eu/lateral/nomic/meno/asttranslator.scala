@@ -17,7 +17,7 @@ This file is part of Scala Nomic Meno.
 
 package eu.lateral.nomic.meno.asttranslator
 
-import eu.lateral.nomic.meno.{ Util, ot }
+import eu.lateral.nomic.meno.{ Util, GroupUtil, ot }
 import eu.lateral.nomic.meno.ast._
 import eu.lateral.nomic.ObjectTranslators
 import eu.lateral.nomic.ASTObjects.ASTObject
@@ -261,11 +261,11 @@ class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) exten
 }
 
 object GroupStatementT extends GroupStatementT(new ObjectTranslators.IdentityOT[GroupStatement])
-class GroupStatementT[T](first: ObjectTranslators.OT[T, GroupStatement]) extends ot.GroupStatementOT(first) with Util {
+class GroupStatementT[T](first: ObjectTranslators.OT[T, GroupStatement]) extends ot.GroupStatementOT(first) with GroupUtil[T] {
 
   //def translate = C("Group") + name.T + C("(") + sequence.join(",") + C(")")
   def translate = format("case class %s(content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){\n%s\n}\n\n",
-    name.T.objname.A, sequence.map(IdentifierT.groupMember).join("\n\n").indent.A)
+    name.T.objname.A, groupMembersSequence.map(IdentifierT.groupMember).join("\n\n").indent.A)
 }
 
 object StatementT extends StatementT(new ObjectTranslators.IdentityOT[Statement])

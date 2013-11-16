@@ -15,7 +15,7 @@ This file is part of Scala Nomic Meno.
     along with Scala Nomic Meno.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-package eu.lateral.nomic.meno.todefaulttranslator
+package eu.lateral.nomic.meno.todefaulttransot
 
 import eu.lateral.nomic.meno.{Util, GroupUtil, ot}
 import eu.lateral.nomic.meno.ast._
@@ -45,9 +45,8 @@ class IdentifierT[T<:ASTObject](first: ObjectTranslators.OT[T, Identifier]) exte
 
   def translate = value
   def referencedStatement = find(value).getOrFail(format("Group element reference '%s' not found",value),pos)
-  def inGroup = referencedStatement.isObject.ifTrueElse(
-    format("""%s.T("")""",value.refname),
-    format("""%s.ifTrueElse("%s","")""",value.refname,value)
+  def inGroup = referencedStatement.isObject.ifTrueElse(value.refname,
+    format("""(if (%s) "%s" else "")""",value.refname,value)
   )
   def binaryName = this / { x =>
     {
@@ -60,21 +59,24 @@ class IdentifierT[T<:ASTObject](first: ObjectTranslators.OT[T, Identifier]) exte
   def binaryOperatorObjectName = binaryName.T.objname + value.T.objname
   def binaryTranslation = format(" +\n        %s.T(\"\")",binaryOperatorObjectName.T.refname)  
   def binaryTranslationClass = format(
-      """|class  %s[T](first:ObjectTranslators.OT[T,%s]) extends ot.%s(first){
+      """|class %s(val obj:%s) extends AnyVal{
+         |  import Util._
+         |  def left(implicit translator:Translator)  = obj.left.translate
+         |  def right(implicit translator:Translator) = obj.right.translate
          |
-         |  def translate = left.T + C(" %s ") + right.T
+         |  def translate(implicit translator:Translator) = s"$left %s $right"
          |}
          |""".stripMargin,
          binaryOperatorObjectName.T.ottname,
          binaryOperatorObjectName.T.objname,
-         binaryOperatorObjectName.T.otname,
          value
          )
-  def binaryIdentity = format("object %s extends %s(new ObjectTranslators.IdentityOT[%s])\n",
-      binaryOperatorObjectName.T.ottname,
-      binaryOperatorObjectName.T.ottname,
-      binaryOperatorObjectName.T.objname)
-  def binaryCase = format("    case x:%-20s => %s.translate(this,x)\n",binaryOperatorObjectName.T.objname,binaryOperatorObjectName.T.otiname)      
+  def binaryCase = format("    case x:%-20s => x.translate\n",binaryOperatorObjectName.T.objname)      
+  def binaryImplicit = format("  implicit def to%s(obj:%s):%s = new %s(obj)\n",
+      binaryOperatorObjectName.T.otiname,
+      binaryOperatorObjectName.T.objname,
+      binaryOperatorObjectName.T.otiname,
+      binaryOperatorObjectName.T.otiname)
 }
 
 object KeywordStatementT extends KeywordStatementT(new ObjectTranslators.IdentityOT[KeywordStatement])
@@ -106,14 +108,15 @@ object TokenStatementT extends TokenStatementT(new ObjectTranslators.IdentityOT[
 class TokenStatementT[T](first: ObjectTranslators.OT[T, TokenStatement]) extends ot.TokenStatementOT(first) with Util {
 
   def translate =format("""
-                          |class  %s[T](first:OT[T,%s])
-                          |extends ot.%s(first) with Utils{
+                          |class %s(val obj:%s) extends AnyVal{
+                          |  import Util._
+                          |  def value = obj.value
                           |
-                          |  def translate = value
+                          |  def translate(implicit translator:Translator) = value
                           |}
                           |
                           |""".stripMargin,
-    name.T.ottname,name.T.objname,name.T.otname)
+    name.T.ottname,name.T.objname)
 
 }
 
@@ -131,15 +134,18 @@ object RuleStatementT extends RuleStatementT(new ObjectTranslators.IdentityOT[Ru
 class RuleStatementT[T](first: ObjectTranslators.OT[T, RuleStatement]) extends ot.RuleStatementOT(first) with Util {
 
   def translate =format("""
-                          |class  %s[T](first:OT[T,%s])
-                          |extends ot.%s(first) with Utils{
+                          |class %s(val obj:%s) extends AnyVal{
+                          |  import Util._
+                          |%s
                           |
-                          |  def translate = %s
+                          |  def translate(implicit translator:Translator) = s"%s"
                           |}
                           |
                           |""".stripMargin,
-    name.T.ottname,name.T.objname,name.T.otname,
-    sequence.join(" + "))
+    name.T.ottname,
+    name.T.objname,
+    sequence.map(RuleElementT.method).join("\n"),
+    sequence.join(" "))
 }
 
 
@@ -149,6 +155,7 @@ class RuleElementT[T](first: ObjectTranslators.OT[T, RuleElement]) extends ot.Ru
 
   def translate = stringRuleElement.T("") +
     patternRuleElement.T("")
+  def method = patternRuleElement.ifDefinedOrElse(patternRuleElement.get/PatternRuleElementT.method, C(""))
 }
 
 
@@ -164,23 +171,32 @@ object StringRuleElementT extends StringRuleElementT(new ObjectTranslators.Ident
 
 class StringRuleElementT[T](first: ObjectTranslators.OT[T, StringRuleElement]) extends ot.StringRuleElementOT(first) {
 
-  def translate = format("C(%s)",string.value)
+  def translate = new ObjectTranslators.StringOT(string.value/{x => x.substring(1,x.length-1)})
 }
 
 
 object PatternRuleElementT extends PatternRuleElementT(new ObjectTranslators.IdentityOT[PatternRuleElement])
 
 class PatternRuleElementT[T <: ASTObject](first: ObjectTranslators.OT[T, PatternRuleElement]) extends ot.PatternRuleElementOT(first) with Util {
-  def translate = referencedStatement.keywordStatement.ifDefinedOrElse(
-    format("""C("%s")""",ref),
-    multiplicity.ifDefinedOrElse(
-      name.T.refname + multiplicity.get.T,
-      name.T.refname + C(".T")
-    )
-  )
+  def translate = expansion
   def referencedStatement = find(ref).getOrFail(format("Reference %s not found", ref), pos)
   def reference = ref.refname
   def ref = elementReference.ifDefinedOrElse(elementReference.get.name.value, name.value)
+  def methodDefinition = format("  def %s(implicit translator:Translator) = %s",name.T.refname,body)
+  def method = referencedStatement.keywordStatement.ifDefinedOrElse(
+      multiplicity.ifDefinedOrElse(methodDefinition,C("")), methodDefinition)
+  def body = referencedStatement.keywordStatement.ifDefinedOrElse(
+      multiplicity.ifDefinedOrElse(bodyBoolean,C("")),
+      multiplicity.ifDefinedOrElse(multiplicity.get.option.ifTrueElse(bodyOption, bodyList),bodySimple)
+      )
+  def bodySimple  = format("obj.%s.translate",name.T.refname)
+  def bodyBoolean = format("if (obj.%s) \"%s\" else \"\"",name.T.refname,name.T)
+  def bodyOption  = format("obj.%s.map(_.translate).mkString",name.T.refname)
+  def bodyList    = format("obj.%s.list.map(_.translate).mkString%s",name.T.refname,multiplicity.T(""))
+  def expansionSimple  = C("$")+name.T.refname
+  def expansion = referencedStatement.keywordStatement.ifDefinedOrElse(
+      multiplicity.ifDefinedOrElse(expansionSimple,C("")),expansionSimple
+      )
 }
 
 
@@ -204,7 +220,7 @@ object OneOrMoreT extends OneOrMoreT(new ObjectTranslators.IdentityOT[OneOrMore]
 
 class OneOrMoreT[T](first: ObjectTranslators.OT[T, OneOrMore]) extends ot.OneOrMoreOT(first) with Util {
 
-  def translate = C(".join") + splitBy.T("")
+  def translate = splitBy.T("")
 }
 
 
@@ -212,7 +228,7 @@ object MoreT extends MoreT(new ObjectTranslators.IdentityOT[More])
 
 class MoreT[T](first: ObjectTranslators.OT[T, More]) extends ot.MoreOT(first) with Util {
 
-  def translate = C(".join") + splitBy.T("")
+  def translate = splitBy.T("")
 }
 
 
@@ -220,9 +236,7 @@ object MultiplicityT extends MultiplicityT(new ObjectTranslators.IdentityOT[Mult
 
 class MultiplicityT[T <: ASTObject](first: ObjectTranslators.OT[T, Multiplicity]) extends ot.MultiplicityOT(first) with Util {
 
-  def translate = option.ifTrueElse(C(""".T("")"""),C("")).str +
-    oneOrMore.T("") +
-    more.T("")
+  def translate = oneOrMore.T("") + more.T("")
 }
 
 
@@ -230,25 +244,20 @@ object BinaryStatementT extends BinaryStatementT(new ObjectTranslators.IdentityO
 
 class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) extends ot.BinaryStatementOT(first) with Util{
   def group=format(
-      """|class  %s[T](first:ObjectTranslators.OT[T,%s]) extends ot.%s(first){
+      """|class %s(val obj:%s) extends AnyVal{
+         |  import Util._
          |
-         |  def translate = %s.T("")%s
+         |  def translate(implicit translator:Translator) = translator(obj.content)
          |}
          |""".stripMargin,
          name.T.ottname,
-         name.T.objname,
-         name.T.otname,
-         operand.T.refname,
-         sequence.map(IdentifierT.binaryTranslation).join
+         name.T.objname
          )
-  def groupIdentity = format("object %s extends %s(new ObjectTranslators.IdentityOT[%s])\n",
-      name.T.ottname,
-      name.T.ottname,
-      name.T.objname)
-  def identities = groupIdentity + sequence.map(IdentifierT.binaryIdentity).join
   def classes = sequence.map(IdentifierT.binaryTranslationClass).join("\n")
-  def groupCase = format("    case x:%-20s => %s.translate(this,x)\n",name.T.objname,name.T.otiname)
+  def groupCase = format("    case x:%-20s => x.translate\n",name.T.objname)
   def cases = groupCase + sequence.map(IdentifierT.binaryCase).join
+  def groupImplicit = format("  implicit def to%s(obj:%s):%s = new %s(obj)\n",name.T.otiname,name.T.objname,name.T.otiname,name.T.otiname)
+  def implicits = groupImplicit + sequence.map(IdentifierT.binaryImplicit).join
   def translate = classes + C("\n") + group
 }
 
@@ -258,16 +267,15 @@ object GroupStatementT extends GroupStatementT(new ObjectTranslators.IdentityOT[
 class GroupStatementT[T](first: ObjectTranslators.OT[T, GroupStatement]) extends ot.GroupStatementOT(first) with GroupUtil[T] {
 
   def translate = format("""
-                           |class  %s[T](first:OT[T,%s])
-                           |extends ot.%s(first) with Utils{
+                           |class %s(val obj:%s) extends AnyVal{
+                           |  import Util._
                            |
-                           |  def translate = %s
+                           |  def translate(implicit translator:Translator) = translator(obj.content)
                            |}
                            |
                            |""".stripMargin,
-      name.T.ottname,name.T.objname,name.T.otname,
-      groupMembersSequence.map(IdentifierT.inGroup).join(" +\n        ")
-    )
+      name.T.ottname,
+      name.T.objname)
 }
 
 
@@ -287,28 +295,17 @@ class StatementT[T](first: ObjectTranslators.OT[T, Statement]) extends ot.Statem
     ruleStatement.ifDefinedOrElse(ruleStatement.get.name.T,C("")) +
     groupStatement.ifDefinedOrElse(groupStatement.get.name.T,C("")) +
     binaryStatement.ifDefinedOrElse(binaryStatement.get.name.T,C(""))
-  def singleCase = format("    case x:%-20s => %s.translate(this,x)\n",name.objname,name.otiname)
+  def singleCase = format("    case x:%-20s => x.translate\n",name.objname)
+  def singleImplicit = format("  implicit def to%s(obj:%s):%s = new %s(obj)\n",name.otiname,name.objname,name.otiname,name.otiname)
   def cases =
     tokenStatement.ifDefinedOrElse(singleCase,C("")).str +
     ruleStatement.ifDefinedOrElse(singleCase,C("")).str +
     groupStatement.ifDefinedOrElse(singleCase,C("")).str +
     binaryStatement.ifDefinedOrElse(binaryStatement.get/BinaryStatementT.cases,C("")).str
-  def identityObjectDef = format("object %s extends %s(new ObjectTranslators.IdentityOT[%s])",
-    name.T.otiname,name.T.ottname,name.T.objname)
-  def identityObject =
-    tokenStatement.ifDefinedOrElse(identityObjectDef,C("")).str +
-    ruleStatement.ifDefinedOrElse(identityObjectDef,C("")).str +
-    groupStatement.ifDefinedOrElse(identityObjectDef,C("")).str +
-    binaryStatement.ifDefinedOrElse(binaryStatement.get/BinaryStatementT.identities,C("")).str
-  def implicitConversionDef =
-    format("  implicit def to%s[T](x:OT[T,%s]):%s[T] =\n    new %s(x)",
-      name.T.ottname,name.T.objname,name.T.ottname,name.T.ottname
-    )
-  def implicitConversion =
-    tokenStatement.ifDefinedOrElse(implicitConversionDef,C("")).str +
-    ruleStatement.ifDefinedOrElse(implicitConversionDef,C("")).str +
-    groupStatement.ifDefinedOrElse(implicitConversionDef,C("")).str +
-    binaryStatement.ifDefinedOrElse(implicitConversionDef,C("")).str
+  def implicits =    tokenStatement.ifDefinedOrElse(singleImplicit,C("")).str +
+    ruleStatement.ifDefinedOrElse(singleImplicit,C("")).str +
+    groupStatement.ifDefinedOrElse(singleImplicit,C("")).str +
+    binaryStatement.ifDefinedOrElse(binaryStatement.get/BinaryStatementT.implicits,C("")).str
 }
 
 
@@ -316,37 +313,33 @@ object MainT extends MainT(new ObjectTranslators.IdentityOT[Main])
 
 class MainT[T](first: ObjectTranslators.OT[T, Main]) extends ot.MainOT(first) {
 
-  def translate = format( """package %s.defaulttranslator
+  def translate = format( """package %s.defaulttrans
                             |import eu.lateral.nomic.ObjectTranslators
-                            |import eu.lateral.nomic.ObjectTranslators.OT
                             |import %s.ast._
-                            |import %s.ot
                             |
-                            |trait Utils{
-                            |%s
-                            |}
+                            |object Util{
+                            |  type Translator = ObjectTranslators.TranslatorWithProperties
+                            |%s}
                             |
                             |%s
-                            |%s
-                            |
-                            |class DefaultTranslator extends ObjectTranslators.TranslatorWithProperties {
+                            |class DefaultTranslator extends Util.Translator {
+                            |  import Util._
+                            |  implicit def translator:Translator = this
                             |  override def apply(obj:Any):String = obj match{
                             |%s
                             |    case _ => obj.toString
                             |  }
-                            |
                             |}
                             |
                           """.stripMargin,
-    translatorProperty("package"), translatorProperty("package"), translatorProperty("package"),
-    sequence.map(StatementT.implicitConversion).join("\n"),
-    sequence.map(StatementT.identityObject).join("\n"),
+    translatorProperty("package"), translatorProperty("package"),
+    sequence.map(StatementT.implicits).join(""),
     sequence.join(""),
     sequence.map(StatementT.cases).join(""))
 }
 
 
-class ToDefaultTranslator extends ObjectTranslators.TranslatorWithProperties {
+class ToDefaultTrans extends ObjectTranslators.TranslatorWithProperties {
 
   override def apply(obj: Any): String = obj match {
     case x: ASTString => ASTStringT.translate(this, x)

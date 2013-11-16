@@ -17,13 +17,16 @@ This file is part of Scala Nomic Meno.
 
 import org.scalatest.Assertions
 import org.junit.Test
-import eu.lateral.nomic.meno.parsertranslator._
+import eu.lateral.nomic.meno.parsertrans._
 import eu.lateral.nomic.meno.parser._
 import eu.lateral.nomic.meno.ast.Main
 
-class ParserTranslatorSuite {
+class ParserTransSuite {
   @Test def testBinary() {
     val src="""
+      ignore     /\r/
+      ignore     /\n/
+      ignore     / +/
       token      number /[0-9]+/
       keyword    plus  "+"
       keyword    minus "-"
@@ -32,7 +35,6 @@ class ParserTranslatorSuite {
       """
     val ast = Parser(src)
     val trans = new ParserTranslator    
-    trans.setProperty("package", "dummypackage")
     val translated = trans(ast) 
     assert(ast.toString.contains("Binary"))
     assert(translated.contains("number ~ rep((plus | minus) ~ number"))
@@ -51,7 +53,6 @@ class ParserTranslatorSuite {
     val ast = Parser(src).asInstanceOf[Main]
     val rec = ast.sequence.list(3)
     val trans = new ParserTranslator    
-    trans.setProperty("package", "dummypackage")
     val translated = trans(rec) 
     assert(ast.toString.contains("Rec"))    
     assert(rec.toString.contains("Rec"))

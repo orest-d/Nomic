@@ -19,6 +19,7 @@ import org.scalatest.Assertions
 import org.junit.Test
 import eu.lateral.nomic.meno.todefaulttranslator._
 import eu.lateral.nomic.meno.parser._
+import eu.lateral.nomic.meno.ast.Main
 
 class ToDefaultTranslatorSuite extends Assertions{
   @Test def testBinary() {
@@ -44,4 +45,24 @@ class ToDefaultTranslatorSuite extends Assertions{
     assert(translated.contains("case x:ExpressionPlus"))
     assert(translated.contains("case x:ExpressionMinus"))
   }
+
+  @Test def testRecursiveGroup() {
+    val src="""
+      token      number     /[0-9]+/
+      token      identifier /[a-z]+/
+      group      A(number)
+      group      Rec(identifier,A)
+      rule       main(rec)
+      """
+    val ast = Parser(src).asInstanceOf[Main]
+    val rec = ast.sequence.list(3)
+    val trans = new ToDefaultTranslator
+    trans.setProperty("package", "dummypackage")
+    val translated = trans(rec) 
+    assert(ast.toString.contains("Rec"))    
+    assert(rec.toString.contains("Rec"))
+    assert(translated.contains("class  RecT[T]"))
+    assert(translated.contains("identifier.T"))
+    assert(translated.contains("number.T"))
+  }  
 }

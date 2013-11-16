@@ -17,13 +17,22 @@ This file is part of Scala Nomic Meno.
 
 package eu.lateral.nomic.meno
 
-object MainClassGenerator {
-  def generateMainClass(packagename:String) =
-  """
-    |package %s
+import java.util.Properties
+
+object MainClassGenerator extends CommonUtils{
+  def generateMainClass(properties: Properties) = {
+    val pkg = properties.getProperty("package")
+    val evaluator = if (properties.getProperty("generate.evaluator","no")){
+      s"      println\n      $pkg.evaluator.Evaluator.main(arg)\n      println\n"
+    }
+    else{
+      ""
+    }
+    s"""
+    |package $pkg
     |import java.io.File
-    |import %s.defaulttranslator.DefaultTranslator
-    |import %s.parser.Parser
+    |import $pkg.defaulttrans.DefaultTranslator
+    |import $pkg.parser.Parser
     |import org.apache.commons.io.FileUtils.writeStringToFile
     |import eu.lateral.nomic.ObjectTranslators.Translator
     |
@@ -35,6 +44,8 @@ object MainClassGenerator {
     |    else{
     |      val path=arg(0)
     |      val ast = Parser.fromFile(path)
+    |      println(ast)
+    |      println
     |      def output(translator:Translator)={
     |        translator.setProperty("input",path)
     |        translator(ast)
@@ -50,8 +61,11 @@ object MainClassGenerator {
     |      else{
     |        println(output(translator))
     |      }
+    |
+    |$evaluator
     |    }
     |  }
     |}
-  """.stripMargin.format(packagename,packagename,packagename)
+  """.stripMargin
+  }
 }

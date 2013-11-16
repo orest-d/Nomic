@@ -21,6 +21,8 @@ import scala.util.parsing.input.Position
 
 abstract class AbstractError extends Throwable{
   def errorMessage:String
+  override def getMessage = errorMessage
+  override def toString = errorMessage  
 }
 
 case class SimpleError(message:String) extends AbstractError{

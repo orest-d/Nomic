@@ -43,16 +43,24 @@ object MavenPomGenerator {
       |    <encoding>UTF-8</encoding>
       |    <scala.version>2.10.0</scala.version>
       |  </properties>
+      |
+      |<!--
       |  <repositories>
       |    <repository>
-      |      <id>Nomic-mvn-repo</id>
-      |      <url>https://raw.github.com/orest-d/Nomic/mvn-repo</url>
-      |      <snapshots>
-      |        <enabled>true</enabled>
-      |        <updatePolicy>always</updatePolicy>
-      |      </snapshots>
+      |      <id>scala-tools.org</id>
+      |      <name>Scala-Tools Maven2 Repository</name>
+      |      <url>http://scala-tools.org/repo-releases</url>
       |    </repository>
       |  </repositories>
+      |
+      |  <pluginRepositories>
+      |    <pluginRepository>
+      |      <id>scala-tools.org</id>
+      |      <name>Scala-Tools Maven2 Repository</name>
+      |      <url>http://scala-tools.org/repo-releases</url>
+      |    </pluginRepository>
+      |  </pluginRepositories>
+      |-->
       |  <dependencies>
       |    <dependency>
       |      <groupId>org.scala-lang</groupId>

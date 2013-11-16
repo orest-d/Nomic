@@ -17,27 +17,31 @@ This file is part of Scala Nomic Meno.
 
 import org.scalatest.Assertions
 import org.junit.Test
-import eu.lateral.nomic.meno.parsertranslator._
+import eu.lateral.nomic.meno.evaluatortrans._
 import eu.lateral.nomic.meno.parser._
 import eu.lateral.nomic.meno.ast.Main
 
-class ParserTranslatorSuite {
+class EvaluatorTransSuite extends Assertions{
   @Test def testBinary() {
     val src="""
       token      number /[0-9]+/
-      keyword    plus  "+"
+      keyword    alpha
+      keyword    plus "+"
       keyword    minus "-"
-      binary     expression on Number(plus,minus)
+      binary     expression on Number(plus, minus)
+      rule       R("rule",alpha?,number*(","))
+      group      statement(expression,alpha,R)
       rule       main(expression)
       """
     val ast = Parser(src)
-    val trans = new ParserTranslator    
-    trans.setProperty("package", "dummypackage")
-    val translated = trans(ast) 
+    val trans = new EvaluatorTrans
+    val translated = trans(ast)
     assert(ast.toString.contains("Binary"))
-    assert(translated.contains("number ~ rep((plus | minus) ~ number"))
-    assert(translated.contains("=> Expression(ExpressionPlus(left,Expression(right)))"))
-    assert(translated.contains("=> Expression(ExpressionMinus(left,Expression(right)))"))
+    assert(translated.contains("class ExpressionE(val obj:Expression)"))
+    assert(translated.contains("class ExpressionPlusE(val obj:ExpressionPlus)"))
+    assert(translated.contains("class ExpressionMinusE(val obj:ExpressionMinus)"))
+    assert(translated.contains("class RE(val obj:R)"))
+    assert(translated.contains("class NumberE(val obj:Number)"))
   }
 
   @Test def testRecursiveGroup() {
@@ -50,16 +54,10 @@ class ParserTranslatorSuite {
       """
     val ast = Parser(src).asInstanceOf[Main]
     val rec = ast.sequence.list(3)
-    val trans = new ParserTranslator    
-    trans.setProperty("package", "dummypackage")
+    val trans = new EvaluatorTrans
     val translated = trans(rec) 
     assert(ast.toString.contains("Rec"))    
     assert(rec.toString.contains("Rec"))
-    assert(translated.contains("def rec"))
-    assert(translated.contains("identifier"))
-    assert(translated.contains("number"))
-    assert(translated.contains("(Rec(_ :ASTObjects.ASTObject))"))
-    assert(!translated.contains("(A(_ :ASTObjects.ASTObject))"))
-  }
-  
+    assert(translated.contains("class RecE"))
+  }  
 }

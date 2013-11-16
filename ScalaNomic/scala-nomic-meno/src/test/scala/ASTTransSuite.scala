@@ -17,29 +17,26 @@ This file is part of Scala Nomic Meno.
 
 import org.scalatest.Assertions
 import org.junit.Test
-import eu.lateral.nomic.meno.parsertranslator._
+import eu.lateral.nomic.meno.asttrans._
 import eu.lateral.nomic.meno.parser._
 import eu.lateral.nomic.meno.ast.Main
 
-class ParserTranslatorSuite {
+class ASTTransSuite extends Assertions{
   @Test def testBinary() {
     val src="""
       token      number /[0-9]+/
-      keyword    plus  "+"
-      keyword    minus "-"
-      binary     expression on Number(plus,minus)
+      keyword    plus "+"
+      binary     expression on Number(plus)
       rule       main(expression)
       """
     val ast = Parser(src)
-    val trans = new ParserTranslator    
-    trans.setProperty("package", "dummypackage")
+    val trans = new ASTTranslator
     val translated = trans(ast) 
     assert(ast.toString.contains("Binary"))
-    assert(translated.contains("number ~ rep((plus | minus) ~ number"))
-    assert(translated.contains("=> Expression(ExpressionPlus(left,Expression(right)))"))
-    assert(translated.contains("=> Expression(ExpressionMinus(left,Expression(right)))"))
+    assert(translated.contains("class ExpressionPlus"))
+    assert(translated.contains("def expressionPlus"))
   }
-
+  
   @Test def testRecursiveGroup() {
     val src="""
       token      number     /[0-9]+/
@@ -50,16 +47,12 @@ class ParserTranslatorSuite {
       """
     val ast = Parser(src).asInstanceOf[Main]
     val rec = ast.sequence.list(3)
-    val trans = new ParserTranslator    
-    trans.setProperty("package", "dummypackage")
-    val translated = trans(rec) 
+    val trans = new ASTTranslator
+    val translated = trans(rec)
     assert(ast.toString.contains("Rec"))    
     assert(rec.toString.contains("Rec"))
-    assert(translated.contains("def rec"))
-    assert(translated.contains("identifier"))
-    assert(translated.contains("number"))
-    assert(translated.contains("(Rec(_ :ASTObjects.ASTObject))"))
-    assert(!translated.contains("(A(_ :ASTObjects.ASTObject))"))
-  }
-  
+    assert(translated.contains("case class Rec"))
+    assert(translated.contains("def identifier"))
+    assert(translated.contains("def number"))
+  }  
 }

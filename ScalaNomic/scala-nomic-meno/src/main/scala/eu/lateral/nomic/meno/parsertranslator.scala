@@ -24,6 +24,7 @@ import eu.lateral.nomic.ObjectTranslators
 import ObjectTranslators.{ OT, StringOT, Translator }
 import eu.lateral.nomic.ASTObjects.ASTObject
 import eu.lateral.nomic.errors.PositionError
+import eu.lateral.nomic.meno.GroupUtil
 
 object ASTStringT extends ASTStringT(new ObjectTranslators.IdentityOT[ASTString])
 
@@ -44,11 +45,10 @@ object IdentifierT extends IdentifierT(new ObjectTranslators.IdentityOT[Identifi
 class IdentifierT[T](first: ObjectTranslators.OT[T, Identifier]) extends ot.IdentifierOT(first) with Util {
 
   def translate = value
-  def insideGroup = format("%-20s ^^ (%s(_ :ASTObjects.ASTObject))",
-    value.refname,
-    (ancestor[GroupStatement].get / GroupStatementT.name.T.objname).str)
+  def insideGroup(objType: String) = format("%-20s ^^ (%s(_ :ASTObjects.ASTObject))",
+    value.refname, C(objType))
 
-    def binaryName = this / { x =>
+  def binaryName = this / { x =>
     {
       x.ancestor[BinaryStatement] match {
         case Some(bs) => bs.name.value
@@ -58,8 +58,8 @@ class IdentifierT[T](first: ObjectTranslators.OT[T, Identifier]) extends ot.Iden
   }
 
   def binaryOperatorObjectName = binaryName.T.objname + value.T.objname
-  def binaryCasePattern = format("%s ~ right",value.T.objname)
-  def binaryCase = format("        case %-20s => %s(%s(left,%s(right)))",binaryCasePattern,binaryName.T.objname,binaryOperatorObjectName,binaryName.T.objname)
+  def binaryCasePattern = format("%s ~ right", value.T.objname)
+  def binaryCase = format("        case %-20s => %s(%s(left,%s(right)))", binaryCasePattern, binaryName.T.objname, binaryOperatorObjectName, binaryName.T.objname)
 }
 
 object NamedObjectT extends NamedObjectT(new ObjectTranslators.IdentityOT[NamedObject])
@@ -226,12 +226,12 @@ class MultiplicityT[T <: ASTObject](first: ObjectTranslators.OT[T, Multiplicity]
 
 object BinaryStatementT extends BinaryStatementT(new ObjectTranslators.IdentityOT[BinaryStatement])
 
-class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) extends ot.BinaryStatementOT(first) with Util{
+class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) extends ot.BinaryStatementOT(first) with Util {
 
-  def pattern = format("%s ~ rep((%s) ~ %s)",operand.T.refname.A,sequence.map(IdentifierT.T.refname).join(" | "),operand.T.refname.A)
+  def pattern = format("%s ~ rep((%s) ~ %s)", operand.T.refname.A, sequence.map(IdentifierT.T.refname).join(" | "), operand.T.refname.A)
   //def translate = C("//binary") + name.T + C("on") + operand.T + C("(") + sequence.join(",") + C(")")
   def translate = format(
-      """|def %-18s = positioned(%s ^^ {
+    """|def %-18s = positioned(%s ^^ {
          |  arg => {
          |    val (first ~ list) = arg
          |    list.foldLeft(%s(first)){
@@ -241,24 +241,31 @@ class BinaryStatementT[T](first: ObjectTranslators.OT[T, BinaryStatement]) exten
          |    }
          |  }
          |})""".stripMargin,
-         name.T.refname.A,
-         pattern,
-         name.T.objname.A,
-         name.T.objname.A,
-         sequence.map(IdentifierT.binaryCase).join("\n"))
+    name.T.refname.A,
+    pattern,
+    name.T.objname.A,
+    name.T.objname.A,
+    sequence.map(IdentifierT.binaryCase).join("\n"))
 }
 
 object GroupStatementT extends GroupStatementT(new ObjectTranslators.IdentityOT[GroupStatement])
 
-class GroupStatementT[T](first: ObjectTranslators.OT[T, GroupStatement]) extends ot.GroupStatementOT(first) with Util {
+class GroupStatementT[T](first: ObjectTranslators.OT[T, GroupStatement]) extends ot.GroupStatementOT(first) with GroupUtil[T] {
 
   //def translate = C("Group") + name.T + C("(") + sequence.join(",") + C(")") +
-  def translate = format("""|def %-18s = positioned(
+  def method(groupname: String) = format("""|def %-18s = positioned(
                             |                           %s
                             |                         )
                             |""".stripMargin,
     name.T.refname,
-    sequence.map(IdentifierT.insideGroup).join(" |\n                           "))
+    groupMembersSequence.map(IdentifierT.insideGroup(groupname)).join(" |\n                           "))
+  def translate = new StringOT(F {
+    (t: Translator, o: T) =>
+      {
+        method(name.T(t, o))(t, o)
+      }
+  })
+
 }
 
 object StatementT extends StatementT(new ObjectTranslators.IdentityOT[Statement])
@@ -279,7 +286,7 @@ class MainT[T](first: ObjectTranslators.OT[T, Main]) extends ot.MainOT(first) wi
 
   def ignores = this / { (t, o) =>
     {
-      val patterns = for (ignore <- findAllIgnores(o)) yield IgnoreStatementT.pattern(t,ignore)
+      val patterns = for (ignore <- findAllIgnores(o)) yield IgnoreStatementT.pattern(t, ignore)
       patterns.mkString("|")
     }
   }
