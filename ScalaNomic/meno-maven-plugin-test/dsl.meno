@@ -1,0 +1,4 @@
+keyword print
+token   string  /"[^"\\\\\\r\\n]*(?:\\\\.[^"\\\\\\r\\n]*)*"/  
+rule    Statement(print,string)
+rules    main(statements*)
