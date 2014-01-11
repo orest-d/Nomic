@@ -32,10 +32,15 @@ class ASTObject extends Positional{
       ancestor[T]
     }
   }
+  def error_message:String = null
 }
 
 class Literal(val literal:String) extends ASTObject{
   override def toString = "Literal(%s)".format(literal)
+}
+
+case class ParsingError(message:String) extends ASTObject{
+  override def error_message = message
 }
 
 class AGroup(val groupContent:ASTObject) extends ASTObject{

@@ -173,7 +173,7 @@ object Parser extends RegexParsers{
   def apply(txt:String)={
     phrase(main)(new CharArrayReader(txt.toArray)) match{
       case Success(x,_)=>x
-      case e:NoSuccess => println(e)
+      case e:NoSuccess => ASTObjects.ParsingError(e.toString)
     }
   }
 
@@ -181,7 +181,7 @@ object Parser extends RegexParsers{
     val txt = readFileToString(new File(path))
     apply(txt)
   }
-
+  
   implicit def convert_option[T](input:Option[AnyRef]):Option[T] = input.map(_.asInstanceOf[T])
 
   implicit def convert_list[T,Elem<:ASTObjects.ASTObject](input:List[AnyRef]):ASTObjects.AList[Elem] = {
