@@ -19,33 +19,84 @@ import org.scalatest.Assertions
 import org.junit.Test
 import eu.lateral.nomic.ASTObjects._
 
-class ASTObjectsSuite extends Assertions{
+class ASTObjectsSuite extends Assertions {
   @Test def testLiteral() {
-     val obj = new Literal("xyz")
-     assert(obj.literal==="xyz")
-     assert(obj.toString==="Literal(xyz)")
-     assert(obj.parent === None)
-     assert(obj.ancestor[Literal] === None)
-     assert(obj.pos.toString() === "<undefined position>")
+    val obj = new Literal("xyz")
+    assert(obj.literal === "xyz")
+    assert(obj.toString === "Literal(xyz)")
+    assert(obj.parent === None)
+    assert(obj.ancestor[Literal] === None)
+    assert(obj.pos.toString() === "<undefined position>")
+    assert(obj.get_children.length === 0)
+    assert(obj.get_topDown.length === 1)
+    assert(obj.get_topDown.head === obj)
+    assert(obj.get_bottomUp.length === 1)
+    assert(obj.get_bottomUp.head === obj)
   }
+
   @Test def testAGroup() {
-     val obj = new AGroup(new Literal("xyz"))
-     assert(obj.groupContent.toString==="Literal(xyz)")
-     assert(obj.toString==="AGroup(Literal(xyz))")
-     assert(obj.groupContent.parent === Some(obj))
-     assert(obj.parent === None)
+    val l=new Literal("xyz")
+    val obj = new AGroup(l)
+    assert(obj.groupContent.toString === "Literal(xyz)")
+    assert(obj.toString === "AGroup(Literal(xyz))")
+    assert(obj.groupContent.parent === Some(obj))
+    assert(obj.parent === None)
+    assert(obj.get_children.length === 1)
+    assert(obj.get_topDown.length === 2)
+    assert(obj.get_topDown.head === obj)
+    assert(obj.get_topDown(1) === l)
+    assert(obj.get_bottomUp.length === 2)
+    assert(obj.get_bottomUp.head === l)
+    assert(obj.get_bottomUp(1) === obj)
   }
+
   @Test def testAGroupAncestor() {
-     val obj = new AGroup(new Literal("xyz"))
-     assert(obj.groupContent.ancestor[AGroup] === Some(obj))
-     assert(obj.groupContent.ancestor[Literal] === None)
+    val l=new Literal("xyz")
+    val obj = new AGroup(l)
+    assert(obj.groupContent.ancestor[AGroup] === Some(obj))
+    assert(obj.groupContent.ancestor[Literal] === None)
+    assert(obj.get_children.length === 1)
+    assert(obj.get_topDown.length === 2)
+    assert(obj.get_topDown.head === obj)
+    assert(obj.get_topDown(1) === l)
+    assert(obj.get_bottomUp.length === 2)
+    assert(obj.get_bottomUp.head === l)
+    assert(obj.get_bottomUp(1) === obj)
   }
+
   @Test def testAList() {
-    val obj= new AList(List(new Literal("a"),new Literal("b")))
-    assert(obj.toString==="List(Literal(a), Literal(b))")
+    val a = new Literal("a")
+    val b = new Literal("b")
+    val obj = new AList(List(a,b))
+    assert(obj.toString === "List(Literal(a), Literal(b))")
+    assert(obj.get_children.length === 2)
+    assert(obj.get_children(0) === a)
+    assert(obj.get_children(1) === b)
+    assert(obj.get_topDown.length === 3)
+    assert(obj.get_topDown(0) === obj)
+    assert(obj.get_topDown(1) === a)
+    assert(obj.get_topDown(2) === b)
+    assert(obj.get_bottomUp.length === 3)
+    assert(obj.get_bottomUp(0) === a)
+    assert(obj.get_bottomUp(1) === b)
+    assert(obj.get_bottomUp(2) === obj)
   }
+
   @Test def testABinary() {
-    val obj= new ABinary(new Literal("a"),new Literal("b"))
-    assert(obj.toString==="Binary(Literal(a), Literal(b))")
+    val a = new Literal("a")
+    val b = new Literal("b")
+    val obj = new ABinary(a,b)
+    assert(obj.toString === "Binary(Literal(a), Literal(b))")
+    assert(obj.get_children.length === 2)
+    assert(obj.get_children(0) === a)
+    assert(obj.get_children(1) === b)
+    assert(obj.get_topDown.length === 3)
+    assert(obj.get_topDown(0) === obj)
+    assert(obj.get_topDown(1) === a)
+    assert(obj.get_topDown(2) === b)
+    assert(obj.get_bottomUp.length === 3)
+    assert(obj.get_bottomUp(0) === a)
+    assert(obj.get_bottomUp(1) === b)
+    assert(obj.get_bottomUp(2) === obj)
   }
 }

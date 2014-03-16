@@ -195,8 +195,11 @@ class RuleStatementT(val obj: RuleStatement) extends AnyVal {
   def sequence(implicit translator: Translator) = obj.sequence.list.map(_.translate).join(" ")
   def astname(implicit translator: Translator) = name.astname
   def arguments(implicit translator: Translator) = obj.sequence.list.map(_.argument).join(", ")
+  def children(implicit translator: Translator) = obj.sequence.list.map(_.child).join
   def translate(implicit translator: Translator) = s"""|case class $astname($arguments) extends ASTObjects.ASTObject{
-    |$sequence}
+    |$sequence
+    |  override def get_children = $children Stream.empty[ASTObjects.ASTObject]
+    |}
     |""".stripMargin
 }
 
@@ -205,6 +208,10 @@ class RuleElementT(val obj: RuleElement) extends AnyVal {
   def translate(implicit translator: Translator) = translator(obj.content)
   def argument(implicit translator: Translator) = obj.content match {
     case x: PatternRuleElement => x.argument
+    case _ => ""
+  }
+  def child(implicit translator: Translator) = obj.content match {
+    case x: PatternRuleElement => x.child
     case _ => ""
   }
 }
@@ -279,6 +286,17 @@ class PatternRuleElementT(val obj: PatternRuleElement) extends AnyVal {
     }
     else{
       s"  $refname.parent = Some(this)\n"      
+    }
+  }
+
+  def child(implicit translator: Translator) = {
+    if (isBoolean || isEmpty) {
+      ""
+    } else if (isOption){
+      s"  $refname.toStream #:::"
+    }
+    else{
+      s"  $refname #::"
     }
   }
 

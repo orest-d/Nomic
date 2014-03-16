@@ -243,6 +243,11 @@ class PatternRuleElementT(val obj: PatternRuleElement) extends AnyVal {
   } else {
     obj.name.value.astname
   }
+  def reftypename = if (obj.elementReference.isDefined) {
+    obj.elementReference.get.name.value.refname
+  } else {
+    obj.name.value.refname
+  }
   def isEmpty(implicit translator: Translator) = ((!obj.multiplicity.isDefined) && (ref.keywordStatement.isDefined))
   def isBoolean(implicit translator: Translator) = ((obj.multiplicity.isDefined) && (ref.keywordStatement.isDefined) && (obj.multiplicity.get.option))
   def isOption(implicit translator: Translator) = ((obj.multiplicity.isDefined) && (!ref.keywordStatement.isDefined) && (obj.multiplicity.get.option))
@@ -252,7 +257,7 @@ class PatternRuleElementT(val obj: PatternRuleElement) extends AnyVal {
     (obj.multiplicity.get.more.isDefined || obj.multiplicity.get.oneOrMore.isDefined))
 
   def parserPattern(implicit translator: Translator) = {
-    val underlying = reftype.refname
+    val underlying = reftypename
     if (isBoolean) {
       s"opt($underlying)"
     } else if (isList){

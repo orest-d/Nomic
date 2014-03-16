@@ -33,10 +33,14 @@ class ASTObject extends Positional{
     }
   }
   def error_message:String = null
+  def get_children:Stream[ASTObject] = Stream.empty[ASTObject]
+  def get_topDown:Stream[ASTObject] = this #:: get_children.flatMap(_.get_topDown)
+  def get_bottomUp:Stream[ASTObject] = get_children.flatMap(_.get_bottomUp) #::: this #:: Stream.empty
 }
 
 class Literal(val literal:String) extends ASTObject{
   override def toString = "Literal(%s)".format(literal)
+
 }
 
 case class ParsingError(message:String) extends ASTObject{
@@ -46,13 +50,16 @@ case class ParsingError(message:String) extends ASTObject{
 class AGroup(val groupContent:ASTObject) extends ASTObject{
   groupContent.parent = Some(this)
   override def toString = "AGroup(%s)".format(groupContent.toString)
+  override def get_children = groupContent #:: Stream.empty[ASTObject]
 }
 
 case class AList[T<:ASTObject](val list:List[T]) extends ASTObject{
   list.foreach(_.parent=Option(this))
   override def toString = list.toString
+  override def get_children = list.toStream #::: Stream.empty[ASTObject]
 }
 
 class ABinary[A <: ASTObject](val left:A,val right:A) extends ASTObject{
   override def toString = s"Binary($left, $right)"
+  override def get_children = left #:: right #:: Stream.empty[ASTObject]
 }
