@@ -20,9 +20,9 @@ package eu.lateral.nomic.meno
 import java.util.Properties
 
 object MainClassGenerator extends CommonUtils{
-  def generateMainClass(properties: Properties) = {
-    val pkg = properties.getProperty("package")
-    val evaluator = if (properties.getProperty("generate.evaluator","no")){
+  def generateMainClass(properties: ProjectParameters) = {
+    val pkg = properties.projectPackage
+    val evaluator = if (properties.generateEvaluator.get){
       s"      println\n      $pkg.evaluator.Evaluator.main(arg)\n      println\n"
     }
     else{
@@ -34,7 +34,6 @@ object MainClassGenerator extends CommonUtils{
     |import $pkg.defaulttrans.DefaultTranslator
     |import $pkg.parser.Parser
     |import org.apache.commons.io.FileUtils.writeStringToFile
-    |import eu.lateral.nomic.ObjectTranslators.Translator
     |
     |object Main {
     |  def main(arg: Array[String]) {
@@ -46,20 +45,13 @@ object MainClassGenerator extends CommonUtils{
     |      val ast = Parser.fromFile(path)
     |      println(ast)
     |      println
-    |      def output(translator:Translator)={
-    |        translator.setProperty("input",path)
-    |        translator(ast)
-    |      }
-    |      def outputToFile(translator:Translator,path:String){
-    |        writeStringToFile(new File(path), output(translator))
-    |      }
     |      val translator = new DefaultTranslator
     |
     |      if (arg.length>=2){
-    |        outputToFile(translator,arg(1))
+    |        writeStringToFile(new File(arg(1)), translator(ast))
     |      }
     |      else{
-    |        println(output(translator))
+    |        println(translator(ast))
     |      }
     |
     |$evaluator

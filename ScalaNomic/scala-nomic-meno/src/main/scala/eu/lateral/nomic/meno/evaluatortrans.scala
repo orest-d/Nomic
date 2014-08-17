@@ -391,7 +391,7 @@ class MainT(val obj: Main) extends AnyVal {
   def cases(implicit translator: Translator) = obj.sequence.list.map(_.cases).mkString
 
   def translate(implicit translator: Translator) = s"""package $pkg.evaluator
-    |import $pkg.ast._
+    |import ${translator.fullASTPackageName}._
     |import $pkg.parser.Parser
     |import eu.lateral.nomic.ASTObjects._
     |

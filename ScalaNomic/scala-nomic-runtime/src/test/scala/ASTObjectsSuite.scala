@@ -37,9 +37,9 @@ class ASTObjectsSuite extends Assertions {
   @Test def testAGroup() {
     val l=new Literal("xyz")
     val obj = new AGroup(l)
-    assert(obj.groupContent.toString === "Literal(xyz)")
+    assert(obj.content.toString === "Literal(xyz)")
     assert(obj.toString === "AGroup(Literal(xyz))")
-    assert(obj.groupContent.parent === Some(obj))
+    assert(obj.content.parent === Some(obj))
     assert(obj.parent === None)
     assert(obj.get_children.length === 1)
     assert(obj.get_topDown.length === 2)
@@ -53,8 +53,8 @@ class ASTObjectsSuite extends Assertions {
   @Test def testAGroupAncestor() {
     val l=new Literal("xyz")
     val obj = new AGroup(l)
-    assert(obj.groupContent.ancestor[AGroup] === Some(obj))
-    assert(obj.groupContent.ancestor[Literal] === None)
+    assert(obj.content.ancestor[AGroup] === Some(obj))
+    assert(obj.content.ancestor[Literal] === None)
     assert(obj.get_children.length === 1)
     assert(obj.get_topDown.length === 2)
     assert(obj.get_topDown.head === obj)

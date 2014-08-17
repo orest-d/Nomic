@@ -26,7 +26,7 @@ import eu.lateral.nomic.TextUtils._
 import eu.lateral.nomic.meno.CommonUtils
 import eu.lateral.nomic.meno.MenoTranslatorBase
 
-object Util extends CommonUtils{
+object Util extends CommonUtils {
   type Translator = ASTTranslator
   implicit def toASTStringT(obj: ASTString): ASTStringT = new ASTStringT(obj)
   implicit def toASTRegexT(obj: ASTRegex): ASTRegexT = new ASTRegexT(obj)
@@ -92,9 +92,21 @@ class IdentifierT(val obj: Identifier) extends AnyVal {
     |    case _ => false
     |  }
     |""".stripMargin
+  def booleanGroupMethodAdvanced(implicit translator: Translator) = s"""|  def $refname:Boolean = content match {
+    |    case _:$astname => true
+    |    case _ => false
+    |  }
+    |""".stripMargin
   def groupMethod(implicit translator: Translator) = {
     if (refSafe.keywordStatement.isDefined) {
       booleanGroupMethod
+    } else {
+      regularGroupMethod
+    }
+  }
+  def groupMethodAdvanced(implicit translator: Translator) = {
+    if (refSafe.keywordStatement.isDefined) {
+      booleanGroupMethodAdvanced
     } else {
       regularGroupMethod
     }
@@ -107,11 +119,24 @@ class IdentifierT(val obj: Identifier) extends AnyVal {
     }
   }
 
+  def abstractPackageName(implicit translator: Translator) = translator.pkg + "." + translator.properties.astAbstractPackage
   def binaryOperatorObjectName = binaryName + astname
   def binaryMethodName = binaryOperatorObjectName.refname
-  def binaryASTClass = s"""|case class $binaryOperatorObjectName(override val left:$binaryName, override val right:$binaryName) extends ASTObjects.ABinary(left,right){
+  def binaryASTClass(implicit translator: Translator) = s"""|case class $binaryOperatorObjectName(override val left:$binaryName, override val right:$binaryName) extends ASTObjects.ABinary(left,right){
     |  override def toString = s"$binaryOperatorObjectName($$left, $$right)" 
     |}
+    |""".stripMargin
+  def binaryASTClassAbstract(implicit translator: Translator) = s"""|abstract class $binaryOperatorObjectName extends ASTObjects.AbstractBinary[$binaryName]{
+    |  override def toString = s"$binaryOperatorObjectName($$left, $$right)" 
+    |}
+    |""".stripMargin
+  def binaryASTClassProxy(implicit translator: Translator) = s"""|case class $binaryOperatorObjectName extends $abstractPackageName.$binaryOperatorObjectName{
+    |  var proxy_obj:$abstractPackageName.$binaryOperatorObjectName = null
+    |  def left = proxy_obj.left
+    |  def right = proxy_obj.right
+    |}
+    |""".stripMargin
+  def binaryASTClassMain(implicit translator: Translator) = s"""|case class $binaryOperatorObjectName(left:$binaryName, right:$binaryName) extends  $abstractPackageName.$binaryOperatorObjectName
     |""".stripMargin
   def binaryMethods = s"""|  def $binaryMethodName:Option[$binaryOperatorObjectName] = content match {
     |    case x:$binaryOperatorObjectName => Some(x)
@@ -155,7 +180,12 @@ class KeywordStatementT(val obj: KeywordStatement) extends AnyVal {
   def astname = obj.name.value.astname
   def keywordParameters(implicit translator: Translator) = obj.keywordParameters.map(_.translate).mkString
 
-  def translate(implicit translator: Translator) = s"case object $astname extends ASTObjects.ASTObject\n\n"
+  def translate(implicit translator: Translator) = translateSimple
+  def abstractPackageName(implicit translator: Translator) = translator.pkg + "." + translator.properties.astAbstractPackage
+  def translateSimple(implicit translator: Translator) = s"case object $astname extends ASTObjects.ASTObject\n\n"
+  def translateAdvancedAbstract(implicit translator: Translator) = s"abstract class $astname extends ASTObjects.ASTObject\n\n"
+  def translateAdvancedProxy(implicit translator: Translator) =  s"case object $astname extends $abstractPackageName.$astname\n\n"
+  def translateAdvancedMain(implicit translator: Translator) = s"case object $astname extends $abstractPackageName.$astname\n\n"
 }
 
 class KeywordParametersT(val obj: KeywordParameters) extends AnyVal {
@@ -179,7 +209,12 @@ class TokenStatementT(val obj: TokenStatement) extends AnyVal {
   def test(implicit translator: Translator) = obj.test.list.map(_.translate).mkString
   def astname = obj.name.value.astname
 
-  def translate(implicit translator: Translator) = s"case class $astname(value :String) extends ASTObjects.Literal(value)\n\n"
+  def abstractPackageName(implicit translator: Translator) = translator.pkg + "." + translator.properties.astAbstractPackage
+  def translate(implicit translator: Translator) = translateSimple
+  def translateSimple(implicit translator: Translator) = s"case class $astname(override val literal :String) extends ASTObjects.Literal(literal)\n\n"
+  def translateAdvancedAbstract(implicit translator: Translator) = s"abstract class $astname extends ASTObjects.AbstractLiteral\n\n"
+  def translateAdvancedProxy(implicit translator: Translator) =  s"case class $astname(var literal:String) extends $abstractPackageName.$astname\n\n"
+  def translateAdvancedMain(implicit translator: Translator) = s"case class $astname(literal :String) extends $abstractPackageName.$astname\n\n"
 }
 
 class IgnoreStatementT(val obj: IgnoreStatement) extends AnyVal {
@@ -195,23 +230,92 @@ class RuleStatementT(val obj: RuleStatement) extends AnyVal {
   def sequence(implicit translator: Translator) = obj.sequence.list.map(_.translate).join(" ")
   def astname(implicit translator: Translator) = name.astname
   def arguments(implicit translator: Translator) = obj.sequence.list.map(_.argument).join(", ")
+  def abstractArguments(implicit translator: Translator) = obj.sequence.list.map(_.abstractArgument).join(", ")
   def children(implicit translator: Translator) = obj.sequence.list.map(_.child).join
-  def translate(implicit translator: Translator) = s"""|case class $astname($arguments) extends ASTObjects.ASTObject{
-    |$sequence
+  def getters(implicit translator: Translator) = obj.sequence.list.map(_.getter).join
+  def proxyGetters(implicit translator: Translator) = obj.sequence.list.map(_.proxyGetter).join
+  def toStringFunction(implicit translator: Translator) = s"""|  override def toString = s"$astname(${obj.sequence.list.map(_.toStringElement).join(",")})"
+    |""".stripMargin
+  def comparison(implicit translator: Translator) = s"""|  override def is_equal(other_o:Any) = other_o match{
+    |    case o: $astname =>
+    |      ${obj.sequence.list.map(_.comparison).join(" && ")}
+    |    case _ => false
+    |  }
+    |""".stripMargin
+  def parentAssignment(implicit translator: Translator) = s"""|  def set_parent = {
+    |${obj.sequence.list.map(_.parentAssignment).join.indent}
+    |  }
+    |""".stripMargin
+
+  def abstractClass(implicit translator: Translator) = s"""|
+    |abstract class $astname extends ASTObjects.ASTObject{
+    |$getters
+    |$parentAssignment
+    |$comparison
+    |$toStringFunction
+    |  override def get_children = $children Stream.empty[ASTObjects.ASTObject]
+    |}  
+    |""".stripMargin
+
+  def abstractPackageName(implicit translator: Translator) = translator.pkg + "." + translator.properties.astAbstractPackage
+  def proxyClass(implicit translator: Translator) = s"""|
+    |class $astname extends $abstractPackageName.$astname{
+    |  var proxy_obj:$abstractPackageName.$astname = null
+    |$proxyGetters
+    |}
+    |""".stripMargin
+
+  def translate(implicit translator: Translator) = translateSimple
+  def translateSimple(implicit translator: Translator) = s"""|case class $astname($arguments) extends ASTObjects.ASTObject{
+    |$parentAssignment
+    |  set_parent
     |  override def get_children = $children Stream.empty[ASTObjects.ASTObject]
     |}
     |""".stripMargin
+  def translateAdvancedAbstract(implicit translator: Translator) = abstractClass
+  def translateAdvancedProxy(implicit translator: Translator) =  proxyClass
+  def translateAdvancedMain(implicit translator: Translator) = {
+    s"""|case class $astname($abstractArguments) extends $abstractPackageName.$astname{
+    |  set_parent
+    |}
+    |
+    |""".stripMargin
+  }
 }
 
 class RuleElementT(val obj: RuleElement) extends AnyVal {
   import Util._
   def translate(implicit translator: Translator) = translator(obj.content)
+  def toStringElement(implicit translator: Translator) = obj.content match {
+    case x: PatternRuleElement => x.toStringElement
+    case _ => ""
+  }
+  def comparison(implicit translator: Translator) = obj.content match {
+    case x: PatternRuleElement => x.comparison
+    case _ => ""
+  }
   def argument(implicit translator: Translator) = obj.content match {
     case x: PatternRuleElement => x.argument
     case _ => ""
   }
+  def abstractArgument(implicit translator: Translator) = obj.content match {
+    case x: PatternRuleElement => x.abstractArgument
+    case _ => ""
+  }
+  def parentAssignment(implicit translator: Translator) = obj.content match {
+    case x: PatternRuleElement => x.parentAssignment
+    case _ => ""
+  }
   def child(implicit translator: Translator) = obj.content match {
     case x: PatternRuleElement => x.child
+    case _ => ""
+  }
+  def getter(implicit translator: Translator) = obj.content match {
+    case x: PatternRuleElement => x.getter
+    case _ => ""
+  }
+  def proxyGetter(implicit translator: Translator) = obj.content match {
+    case x: PatternRuleElement => x.proxyGetter
     case _ => ""
   }
 }
@@ -266,42 +370,67 @@ class PatternRuleElementT(val obj: PatternRuleElement) extends AnyVal {
   def fullType(implicit translator: Translator) = {
     if (isBoolean) {
       "Boolean"
-    } else if (isList){
+    } else if (isList) {
       s"ASTObjects.AList[$reftype]"
-    } else if (isOption){
-      s"Option[$reftype]"      
-    }
-    else{
+    } else if (isOption) {
+      s"Option[$reftype]"
+    } else {
       reftype
     }
   }
 
-  def parent(implicit translator: Translator) = {
+  def aast(implicit translator: Translator) = translator.properties.astAbstractPackage
+  
+  def abstractFullType(implicit translator: Translator) = {
+    if (isBoolean) {
+      "Boolean"
+    } else if (isList) {
+      s"ASTObjects.AList[$aast.$reftype]"
+    } else if (isOption) {
+      s"Option[$aast.$reftype]"
+    } else {
+      s"$aast.$reftype"
+    }
+  }
+  
+  def parentAssignment(implicit translator: Translator) = {
     if (isBoolean || isEmpty) {
       ""
-    } else if (isList){
+    } else if (isList) {
       s"  $refname.parent = Some(this)\n"
-    } else if (isOption){
-      s"  $refname.foreach(_.parent=Some(this))\n"      
-    }
-    else{
-      s"  $refname.parent = Some(this)\n"      
+    } else if (isOption) {
+      s"  $refname.foreach(_.parent=Some(this))\n"
+    } else {
+      s"  $refname.parent = Some(this)\n"
     }
   }
 
   def child(implicit translator: Translator) = {
     if (isBoolean || isEmpty) {
       ""
-    } else if (isOption){
+    } else if (isOption) {
       s"  $refname.toStream #:::"
-    }
-    else{
+    } else {
       s"  $refname #::"
     }
   }
 
+  def toStringElement(implicit translator: Translator) = if (isEmpty) "" else "$" + refname
+  def comparison(implicit translator: Translator) = {
+    if (isEmpty) { "" }
+    else if (isBoolean) {
+      s"($refname == o.$refname)"
+    } else if (isOption) {
+      s"(if ($refname.isDefined && o.$refname.isDefined) $refname.get is_equal o.$refname.get else $refname == o.$refname\n      )"
+    } else {
+      s"($refname is_equal o.$refname)"
+    }
+  }
+  def getter(implicit translator: Translator) = if (isEmpty) "" else s"  def $refname:$fullType\n"
+  def proxyGetter(implicit translator: Translator) = if (isEmpty) "" else s"  def $refname = proxy_obj.$refname\n"
   def argument(implicit translator: Translator) = if (isEmpty) "" else s"$refname:$fullType"
-  def translate(implicit translator: Translator) = parent
+  def abstractArgument(implicit translator: Translator) = if (isEmpty) "" else s"$refname:$abstractFullType"
+  def translate(implicit translator: Translator) = parentAssignment
 }
 
 class ElementReferenceT(val obj: ElementReference) extends AnyVal {
@@ -348,19 +477,40 @@ class BinaryStatementT(val obj: BinaryStatement) extends AnyVal {
   def astname(implicit translator: Translator) = name.astname
   def cname(implicit translator: Translator) = name.cname
   def methods(implicit translator: Translator) = obj.sequence.list.map(_.binaryMethods).mkString
-  def derivedClasses(implicit translator: Translator) = obj.sequence.list.map(_.binaryASTClass).join("\n")
+  def derivedClassesSimple(implicit translator: Translator) = obj.sequence.list.map(_.binaryASTClass).join("\n")
+  def derivedClassesAbstract(implicit translator: Translator) = obj.sequence.list.map(_.binaryASTClassAbstract).join("\n")
+  def derivedClassesProxy(implicit translator: Translator) = obj.sequence.list.map(_.binaryASTClassProxy).join("\n")
+  def derivedClassesMain(implicit translator: Translator) = obj.sequence.list.map(_.binaryASTClassMain).join("\n")
   def baseMethod = s"""|  def $operandRefname:Option[$operandASTname] = content match {
     |    case x:$operandASTname => Some(x)
     |    case _ => None
     |  }""".stripMargin
-  def classes(implicit translator: Translator) = s"""|case class $astname(content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
+
+  def abstractPackageName(implicit translator: Translator) = translator.pkg + "." + translator.properties.astAbstractPackage
+  def translate(implicit translator: Translator) = translateSimple
+  def translateSimple(implicit translator: Translator) = s"""|case class $astname(content:ASTObjects.ASTObject) extends ASTObjects.AbstractGroup{
     |$baseMethod
     |$methods}
     |
-    |$derivedClasses
+    |$derivedClassesSimple
     |""".stripMargin
-
-  def translate(implicit translator: Translator) = classes
+  def translateAdvancedAbstract(implicit translator: Translator) = s"""|abstract class $astname extends ASTObjects.AbstractGroup{
+    |  override def toString = s"$astname($$content)"
+    |$baseMethod
+    |$methods}
+    |
+    |$derivedClassesAbstract
+    |""".stripMargin
+  def translateAdvancedProxy(implicit translator: Translator) =  s"""|class $astname extends $abstractPackageName.$astname{
+    |  var content:ASTObjects.ASTObject = null
+    |}
+    |
+    |$derivedClassesProxy
+    |""".stripMargin
+  def translateAdvancedMain(implicit translator: Translator) = s"""|case class $astname(content:ASTObjects.ASTObject) extends $abstractPackageName.$astname
+    |
+    |$derivedClassesMain
+    |""".stripMargin
 }
 
 class GroupStatementT(val obj: GroupStatement) extends AnyVal {
@@ -371,16 +521,14 @@ class GroupStatementT(val obj: GroupStatement) extends AnyVal {
     val m = for (r <- referencedGroupMembers; id <- r.identifier) yield id.groupMethod
     m.mkString
   }
+  def membersAdvanced(implicit translator: Translator) = {
+    val m = for (r <- referencedGroupMembers; id <- r.identifier) yield id.groupMethodAdvanced
+    m.mkString
+  }
   def astname(implicit translator: Translator) = name.astname
   def cname(implicit translator: Translator) = name.cname
-  def classes(implicit translator: Translator) = s"""|case class $astname(content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
-    |$members
-    |  override def toString = s"$astname($$content)"
-    |}
-    |
-    |""".stripMargin
 
-  def translate(implicit translator: Translator) = classes
+  def translate(implicit translator: Translator) = translateSimple
 
   def referencedGroupMembers(implicit translator: Translator) = {
     val m = for (
@@ -389,6 +537,27 @@ class GroupStatementT(val obj: GroupStatement) extends AnyVal {
     ) yield member
     scala.collection.mutable.LinkedHashSet(m: _*).toList
   }
+  def abstractPackageName(implicit translator: Translator) = translator.pkg + "." + translator.properties.astAbstractPackage
+  def translateSimple(implicit translator: Translator) = s"""|case class $astname(content:ASTObjects.ASTObject) extends ASTObjects.AbstractGroup{
+    |$members
+    |  override def toString = s"$astname($$content)"
+    |}
+    |
+    |""".stripMargin
+  def translateAdvancedAbstract(implicit translator: Translator) = s"""|abstract class $astname extends ASTObjects.AbstractGroup{
+    |$membersAdvanced
+    |  override def toString = s"$astname($$content)"
+    |}
+    |
+    |""".stripMargin
+  def translateAdvancedProxy(implicit translator: Translator) =  s"""|class $astname extends $abstractPackageName.$astname{
+    |  var content:ASTObjects.ASTObject = null
+    |}
+    |
+    |""".stripMargin
+  def translateAdvancedMain(implicit translator: Translator) = s"""|case class $astname(content:ASTObjects.ASTObject) extends $abstractPackageName.$astname
+    |
+    |""".stripMargin
 }
 
 class StatementT(val obj: Statement) extends AnyVal {
@@ -408,18 +577,29 @@ class StatementT(val obj: Statement) extends AnyVal {
 class MainT(val obj: Main) extends AnyVal {
   import Util._
   def sequence(implicit translator: Translator) = obj.sequence.list.map(_.translate).mkString
-  def pkg(implicit translator: Translator) = translator.pkg
-
-  def translate(implicit translator: Translator) = s"""package $pkg.ast
+  def pkg(implicit translator: Translator) = translator.fullPackageName
+  def aast(implicit translator: Translator) = translator.pkg + "." + translator.properties.astAbstractPackage
+  def translate(implicit translator: Translator) = s"""package $pkg
     |import eu.lateral.nomic.ASTObjects
+    |
+    |$sequence
+    |""".stripMargin
+  def translateAdvancedMain(implicit translator: Translator) = s"""package $pkg
+    |import eu.lateral.nomic.ASTObjects
+    |import $aast
     |
     |$sequence
     |""".stripMargin
 }
 
-class ASTTranslator extends MenoTranslatorBase {
+abstract class ASTTranslator extends MenoTranslatorBase{
+  def packageName:String
+  def fullPackageName = s"$pkg.$packageName"
+}
+class ASTTranslatorSimple extends ASTTranslator {
   import Util._
   implicit def translator: Translator = this
+  def packageName = properties.astMainPackage.get
 
   override def apply(obj: Any): String = obj match {
     case x: ASTString => x.translate
@@ -432,7 +612,7 @@ class ASTTranslator extends MenoTranslatorBase {
     case x: StringRegex => x.translate
     case x: TokenStatement => x.translate
     case x: IgnoreStatement => x.translate
-    case x: RuleStatement => x.translate
+    case x: RuleStatement => x.translateSimple
     case x: RuleElement => x.translate
     case x: Register => x.translate
     case x: StringRuleElement => x.translate
@@ -451,3 +631,107 @@ class ASTTranslator extends MenoTranslatorBase {
   }
 }
 
+class ASTTranslatorAdvancedAbstract extends ASTTranslator {
+  import Util._
+  implicit def translator: Translator = this
+  def packageName = properties.astAbstractPackage.get
+
+  override def apply(obj: Any): String = obj match {
+    case x: ASTString => x.translate
+    case x: ASTRegex => x.translate
+    case x: Identifier => x.translate
+    case x: NamedObject => x.translate
+    case x: ClassGenerator => x.translate
+    case x: KeywordStatement => x.translateAdvancedAbstract
+    case x: KeywordParameters => x.translate
+    case x: StringRegex => x.translate
+    case x: TokenStatement => x.translateAdvancedAbstract
+    case x: IgnoreStatement => x.translate
+    case x: RuleStatement => x.translateAdvancedAbstract
+    case x: RuleElement => x.translate
+    case x: Register => x.translate
+    case x: StringRuleElement => x.translate
+    case x: PatternRuleElement => x.translate
+    case x: ElementReference => x.translate
+    case x: SplitBy => x.translate
+    case x: OneOrMore => x.translate
+    case x: More => x.translate
+    case x: Multiplicity => x.translate
+    case x: BinaryStatement => x.translateAdvancedAbstract
+    case x: GroupStatement => x.translateAdvancedAbstract
+    case x: Statement => x.translate
+    case x: Main => x.translate
+
+    case _ => obj.toString
+  }
+}
+
+class ASTTranslatorAdvancedMain extends ASTTranslator {
+  import Util._
+  implicit def translator: Translator = this
+  def packageName = properties.astMainPackage.get
+
+  override def apply(obj: Any): String = obj match {
+    case x: ASTString => x.translate
+    case x: ASTRegex => x.translate
+    case x: Identifier => x.translate
+    case x: NamedObject => x.translate
+    case x: ClassGenerator => x.translate
+    case x: KeywordStatement => x.translateAdvancedMain
+    case x: KeywordParameters => x.translate
+    case x: StringRegex => x.translate
+    case x: TokenStatement => x.translateAdvancedMain
+    case x: IgnoreStatement => x.translate
+    case x: RuleStatement => x.translateAdvancedMain
+    case x: RuleElement => x.translate
+    case x: Register => x.translate
+    case x: StringRuleElement => x.translate
+    case x: PatternRuleElement => x.translate
+    case x: ElementReference => x.translate
+    case x: SplitBy => x.translate
+    case x: OneOrMore => x.translate
+    case x: More => x.translate
+    case x: Multiplicity => x.translate
+    case x: BinaryStatement => x.translateAdvancedMain
+    case x: GroupStatement => x.translateAdvancedMain
+    case x: Statement => x.translate
+    case x: Main => x.translateAdvancedMain
+
+    case _ => obj.toString
+  }
+}
+
+class ASTTranslatorAdvancedProxy extends ASTTranslator {
+  import Util._
+  implicit def translator: Translator = this
+  def packageName = properties.astProxyPackage.get
+
+  override def apply(obj: Any): String = obj match {
+    case x: ASTString => x.translate
+    case x: ASTRegex => x.translate
+    case x: Identifier => x.translate
+    case x: NamedObject => x.translate
+    case x: ClassGenerator => x.translate
+    case x: KeywordStatement => x.translateAdvancedProxy
+    case x: KeywordParameters => x.translate
+    case x: StringRegex => x.translate
+    case x: TokenStatement => x.translateAdvancedProxy
+    case x: IgnoreStatement => x.translate
+    case x: RuleStatement => x.translateAdvancedProxy
+    case x: RuleElement => x.translate
+    case x: Register => x.translate
+    case x: StringRuleElement => x.translate
+    case x: PatternRuleElement => x.translate
+    case x: ElementReference => x.translate
+    case x: SplitBy => x.translate
+    case x: OneOrMore => x.translate
+    case x: More => x.translate
+    case x: Multiplicity => x.translate
+    case x: BinaryStatement => x.translateAdvancedProxy
+    case x: GroupStatement => x.translateAdvancedProxy
+    case x: Statement => x.translate
+    case x: Main => x.translate
+
+    case _ => obj.toString
+  }
+}

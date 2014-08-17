@@ -391,18 +391,17 @@ class MainT(val obj: Main) extends AnyVal {
   def cases(implicit translator: Translator) = obj.sequence.list.map(_.cases).mkString
 
   def translate(implicit translator: Translator) = s"""package $pkg.defaulttrans
-    |import eu.lateral.nomic.ObjectTranslators
-    |import $pkg.ast._
+    |import ${translator.fullASTPackageName}._
     |
     |object Util{
-    |  type Translator = ObjectTranslators.TranslatorWithProperties
+    |  type Translator = DefaultTranslator
     |$implicits}
     |
     |$classes
-    |class DefaultTranslator extends Util.Translator {
+    |class DefaultTranslator{
     |  import Util._
     |  implicit def translator:Translator = this
-    |  override def apply(obj:Any):String = obj match{
+    |  def apply(obj:Any):String = obj match{
     |$cases
     |    case _ => obj.toString
     |  }

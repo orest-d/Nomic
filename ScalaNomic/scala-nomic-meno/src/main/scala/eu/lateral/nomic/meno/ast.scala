@@ -35,11 +35,11 @@ case object PositionMark extends ASTObjects.ASTObject
 
 case object Binary extends ASTObjects.ASTObject
 
-case class ASTString(value :String) extends ASTObjects.Literal(value)
+case class ASTString(override val value :String) extends ASTObjects.Literal(value)
 
-case class ASTRegex(value :String) extends ASTObjects.Literal(value)
+case class ASTRegex(override val value :String) extends ASTObjects.Literal(value)
 
-case class Identifier(value :String) extends ASTObjects.Literal(value)
+case class Identifier(override val value :String) extends ASTObjects.Literal(value)
 
 case class NamedObject(name:Identifier) extends ASTObjects.ASTObject{
   name.parent          = Some(this)
@@ -59,7 +59,7 @@ case class KeywordParameters(string:ASTString, o_regex:Option[StringRegex]) exte
   o_regex.foreach(_.parent=Some(this))
 }
 
-case class StringRegex(content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
+case class StringRegex(override val content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
   def string:Option[ASTString] = content match {
     case x:ASTString => Some(x)
     case _ => None
@@ -85,7 +85,7 @@ case class RuleStatement(name:Identifier, sequence:ASTObjects.AList[RuleElement]
   sequence.parent      = Some(this)
 }
 
-case class RuleElement(content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
+case class RuleElement(override val content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
   def stringRuleElement:Option[StringRuleElement] = content match {
     case x:StringRuleElement => Some(x)
     case _ => None
@@ -127,7 +127,7 @@ case class More(splitBy:Option[SplitBy]) extends ASTObjects.ASTObject{
   splitBy.foreach(_.parent=Some(this))
 }
 
-case class Multiplicity(content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
+case class Multiplicity(override val content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
   def option:Boolean = content match {
     case ASTOption => true
     case _ => false
@@ -153,7 +153,7 @@ case class GroupStatement(name:Identifier, sequence:ASTObjects.AList[Identifier]
   sequence.parent      = Some(this)
 }
 
-case class Statement(content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
+case class Statement(override val content:ASTObjects.ASTObject) extends ASTObjects.AGroup(content){
   def tokenStatement:Option[TokenStatement] = content match {
     case x:TokenStatement => Some(x)
     case _ => None

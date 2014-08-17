@@ -17,7 +17,6 @@ This file is part of Scala Nomic Meno.
 
 package eu.lateral.nomic.meno
 import java.io.File
-import eu.lateral.nomic.meno.asttrans.ASTTranslator
 import org.apache.commons.io.FileUtils._
 import eu.lateral.nomic.meno.parsertrans.ParserTranslator
 import eu.lateral.nomic.meno.ottranslator.OTTranslator
@@ -28,13 +27,17 @@ import eu.lateral.nomic.meno.MainClassGenerator.generateMainClass
 import eu.lateral.nomic.ObjectTranslators.Translator
 //import eu.lateral.nomic.meno.toprologgenerator.ToPrologGenerator
 //import eu.lateral.nomic.meno.prologgenerator.PrologGenerator
+import eu.lateral.nomic.meno.asttrans.ASTTranslatorAdvancedAbstract
+import eu.lateral.nomic.meno.asttrans.ASTTranslatorAdvancedMain
+import eu.lateral.nomic.meno.asttrans.ASTTranslatorAdvancedProxy
+import eu.lateral.nomic.meno.asttrans.ASTTranslatorSimple
 import eu.lateral.nomic.meno.evaluatortrans._
 import java.util.Properties
 import java.io.FileReader
 import java.io.FileWriter
 
-object Meno extends CommonUtils{
-
+object Meno extends CommonUtils {
+  /*
   def getProperties(file: File) = {
     val nameVector = file.getName.split("[.-]")
     val projectPackageVector = nameVector.take(nameVector.length - 1).map(_.toLowerCase)
@@ -57,11 +60,12 @@ object Meno extends CommonUtils{
       p
     }
   }
-
+*/
   def main(arg: Array[String]) {
     if (arg.length != 1) {
       println("meno [project.meno]")
     } else {
+      /*
       val menoPath = arg(0)
       val menoFile = new File(menoPath)
       val nameVector = menoFile.getName.split("[.-]")
@@ -80,32 +84,35 @@ object Meno extends CommonUtils{
       val sourceBaseFile = new File(new File(new File(projectDir, "src"), "main"), "scala")
       val sourceFile = projectPackageVector.foldLeft(sourceBaseFile) { (total, item) => new File(total, item) }
       val sourceDir = sourceFile.getAbsolutePath
+      */
+      val pp = ProjectParameters.withProperties(arg(0))
 
-      println("Meno path:         " + menoPath)
-      println("Properties path:   " + propertiesFile.getAbsolutePath())
-      println("Project name:      " + projectName)
-      println("Project package:   " + projectPackage)
-      println("Project directory: " + projectDir)
-      println("Source base:       " + sourceBaseFile.getPath)
-      println("Source directory:  " + sourceDir)
+      println("Meno path:         " + pp.menoPath)
+      println("Meno path:         " + pp.menoPath.get)
+      println("Properties path:   " + pp.propertiesFile.getAbsolutePath())
+      println("Project name:      " + pp.projectName)
+      println("Project package:   " + pp.projectPackage)
+      println("Project directory: " + pp.projectDir)
+      println("Source base:       " + pp.scalaSourcesBaseFile.getPath)
+      println("Source directory:  " + pp.scalaSourcesDir)
 
       trait ProjectProperties {
         self: MenoTranslatorBase =>
-        override val properties = projectProperties
+        override val properties = pp
       }
 
-      val ast = eu.lateral.nomic.meno.parser.Parser.fromFile(menoPath)
-      if (!projectFile.mkdirs()) {
-        println("Cannot create directory " + projectDir)
+      val ast = eu.lateral.nomic.meno.parser.Parser.fromFile(pp.menoPath.get)
+      if (!pp.projectFile.mkdirs()) {
+        println("Cannot create directory " + pp.projectDir)
       }
-      if (!sourceFile.mkdirs()) {
-        println("Cannot create directory " + sourceDir)
+      if (!pp.scalaPackageSourcesFile.mkdirs()) {
+        println("Cannot create directory " + pp.scalaSourcesDir)
       }
 
       def createSourceOld(translator: Translator, src: String) = {
-        translator.setProperty("package", projectPackage)
+        translator.setProperty("package", pp.projectPackage.get)
         val filename = src + ".scala"
-        val file: File = new File(sourceDir, filename)
+        val file: File = new File(pp.scalaSourcesDir.get, filename)
         println("Translating " + src)
         val content = translator.apply(ast)
         if (file.exists()) {
@@ -119,7 +126,7 @@ object Meno extends CommonUtils{
 
       def createSource(translator: MenoTranslatorBase, src: String) = {
         val filename = src + ".scala"
-        val file: File = new File(sourceDir, filename)
+        val file: File = new File(pp.scalaSourcesDir.get, filename)
         println("Translating " + src)
         val content = translator.apply(ast)
         if (file.exists()) {
@@ -132,8 +139,8 @@ object Meno extends CommonUtils{
       }
 
       def createFile(translator: Translator, filename: String) = {
-        translator.setProperty("package", projectPackage)
-        val file = new File(projectDir, filename)
+        translator.setProperty("package", pp.projectPackage.get)
+        val file = new File(pp.projectDir, filename)
         println("Translating " + filename)
         val content = translator.apply(ast)
         if (file.exists()) {
@@ -158,18 +165,24 @@ object Meno extends CommonUtils{
       }
 
       println()
-      generateOnce(projectDir, "pom.xml", generatePom(groupId, projectName, projectPackage))
-      generateOnce(sourceDir, "Main.scala", generateMainClass(projectProperties))
+      generateOnce(pp.projectDir, "pom.xml", generatePom(pp.mavenGroupId.get, pp.mavenArtefactId.get, pp.projectPackage.get))
+      generateOnce(pp.scalaSourcesDir.get, "Main.scala", generateMainClass(pp))
 
-      createSource(new ASTTranslator with ProjectProperties, "ast")
+      if (pp.astAdvanced.get) {
+        createSource(new ASTTranslatorAdvancedMain with ProjectProperties, pp.astMainPackage.get)
+        createSource(new ASTTranslatorAdvancedAbstract with ProjectProperties, pp.astAbstractPackage.get)
+        createSource(new ASTTranslatorAdvancedProxy with ProjectProperties, pp.astProxyPackage.get)
+      } else {
+        createSource(new ASTTranslatorSimple with ProjectProperties, pp.astMainPackage.get)
+      }
       createSource(new ParserTranslator with ProjectProperties, "parser")
       createSource(new ToDefaultTrans with ProjectProperties, "defaulttrans")
-      if (projectProperties.getProperty("generate.OT", "no")) {
+      if (pp.generateOT.get) {
         createSourceOld(new OTTranslator, "ot")
         createSourceOld(new ToDefaultTranslator, "defaulttranslator")
       }
-      if (projectProperties.getProperty("generate.evaluator", "yes")) {
-        createSource(new EvaluatorTrans with ProjectProperties, "evaluator")        
+      if (pp.generateEvaluator.get) {
+        createSource(new EvaluatorTrans with ProjectProperties, "evaluator")
       }
       //createSource(new ToPrologGenerator,"prologgenerator")
       //createFile(new PrologGenerator,"metadescription.pl" )

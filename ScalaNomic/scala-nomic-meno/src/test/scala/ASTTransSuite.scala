@@ -30,7 +30,7 @@ class ASTTransSuite extends Assertions{
       rule       main(expression)
       """
     val ast = Parser(src)
-    val trans = new ASTTranslator
+    val trans = new ASTTranslatorSimple
     val translated = trans(ast) 
     assert(ast.toString.contains("Binary"))
     assert(translated.contains("class ExpressionPlus"))
@@ -47,7 +47,7 @@ class ASTTransSuite extends Assertions{
       """
     val ast = Parser(src).asInstanceOf[Main]
     val rec = ast.sequence.list(3)
-    val trans = new ASTTranslator
+    val trans = new ASTTranslatorSimple
     val translated = trans(rec)
     assert(ast.toString.contains("Rec"))    
     assert(rec.toString.contains("Rec"))

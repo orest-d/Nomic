@@ -18,16 +18,14 @@ This file is part of Scala Nomic Meno.
 package eu.lateral.nomic.meno
 import eu.lateral.nomic.meno.ast._
 import eu.lateral.nomic.ASTObjects.ASTObject
-import eu.lateral.nomic.ObjectTranslators
 import eu.lateral.nomic.errors.PositionError
-import java.util.Properties
 
 class MenoTranslatorBase extends CommonUtils{
   import eu.lateral.nomic.TextUtils._
   var statmap: Map[String, Statement] = null
 
   def apply(obj: Any): String = obj.toString
-  val properties = new Properties
+  val properties = new ProjectParameters
   def getStatementMap(obj: ASTObject): Map[String, Statement] = {
     val smap = for (
       m <- obj.ancestorOrSelf[Main].toList;
@@ -58,6 +56,8 @@ class MenoTranslatorBase extends CommonUtils{
   def group(name: Identifier) = for { x <- ref(name); y <- x.groupStatement } yield y
   def binary(name: Identifier) = for { x <- ref(name); y <- x.binaryStatement } yield y
 
-  def expandGroup:Boolean = properties.getProperty("expand.groups", "yes")
-  def pkg = properties.getProperty("package", "mypackage")
+  def expandGroup:Boolean = properties.expandGroups.get
+  def pkg = properties.projectPackage.get
+  def astPackageName = if (properties.astAdvanced.get) properties.astAbstractPackage.get else properties.astMainPackage.get
+  def fullASTPackageName = pkg + "." + astPackageName
 }
