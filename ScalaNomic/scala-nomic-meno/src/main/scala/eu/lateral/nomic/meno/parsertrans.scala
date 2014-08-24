@@ -1,19 +1,19 @@
 /*
-This file is part of Scala Nomic Meno.
+ This file is part of Scala Nomic Meno.
 
-    Scala Nomic Meno is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+ Scala Nomic Meno is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
 
-    Scala Nomic Meno is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+ Scala Nomic Meno is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with Scala Nomic Meno.  If not, see <http://www.gnu.org/licenses/>.
-*/
+ You should have received a copy of the GNU General Public License
+ along with Scala Nomic Meno.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 package eu.lateral.nomic.meno.parsertrans
 import eu.lateral.nomic.ObjectTranslators
@@ -93,8 +93,8 @@ class IdentifierT(val obj: Identifier) extends AnyVal {
   def binaryOperatorObjectName = binaryName + astname
   def insideGroup(objType: String) = s"%-20s ^^ ($objType(_ :ASTObjects.ASTObject))".format(refname)
 
-  def binaryCasePattern = s"$astname ~ right"
-  def binaryCase = s"        case %-20s => $binaryName($binaryOperatorObjectName(left,$binaryName(right)))".format(binaryCasePattern)
+  def binaryCasePattern(implicit translator: Translator) = if (translator.properties.astAdvanced.get) s"$astname() ~ right" else s"$astname ~ right"
+  def binaryCase(implicit translator: Translator) = s"        case %-20s => $binaryName($binaryOperatorObjectName(left,$binaryName(right)))".format(binaryCasePattern)
 
   def translate(implicit translator: Translator) = value
 
@@ -133,7 +133,15 @@ class KeywordStatementT(val obj: KeywordStatement) extends AnyVal {
   def refname = obj.name.value.refname
   def keywordParameters(implicit translator: Translator) = obj.keywordParameters.map(_.translate).mkString
   def pattern(implicit translator: Translator) = if (obj.keywordParameters.isDefined) obj.keywordParameters.get.translate else s"""literal("$name")"""
-  def translate(implicit translator: Translator) = s"def %-18s = $pattern ^^ (_ => $astname)\n\n".format(refname)
+  def translate(implicit translator: Translator) = {
+    if (translator.properties.astAdvanced.get){
+      s"""|def %-18s = $pattern ^^ (_ => $astname())
+      |""".stripMargin.format(refname)            
+    }
+    else{
+      s"def %-18s = $pattern ^^ (_ => $astname)\n\n".format(refname)
+    }
+  }
 }
 
 class KeywordParametersT(val obj: KeywordParameters) extends AnyVal {
@@ -155,10 +163,34 @@ class TokenStatementT(val obj: TokenStatement) extends AnyVal {
   def name(implicit translator: Translator) = obj.name.translate
   def o_regex(implicit translator: Translator) = obj.o_regex.translate
   def test(implicit translator: Translator) = obj.test.list.map(_.translate).mkString
+  def aastPackage(implicit translator: Translator) = translator.properties.astAbstractPackage.get
+  def proxyPackage(implicit translator: Translator) = translator.properties.astProxyPackage.get
+  def asttype(implicit translator: Translator) = if (translator.properties.astAdvanced.get) s"$aastPackage.$astname" else astname
   def astname = obj.name.value.astname
   def refname = obj.name.value.refname
-
-  def translate(implicit translator: Translator) = s"def %-18s = positioned(regex(${o_regex}r) ^^ {$astname(_:String)})\n\n".format(refname)
+  def varname = obj.name.value.refname+"_var"
+  
+  def translate(implicit translator: Translator) = mainFunctions("")
+  def mainFunctions(varparsing:String)(implicit translator: Translator) = s"""|def %-18s = positioned(regex(${o_regex}r) ^^ {$astname(_:String)}) $varparsing
+    |
+    |def parse_$refname(txt:String):$asttype ={
+    |  phrase($refname)(new CharArrayReader(txt.toArray)) match{
+    |    case Success(x,_)=>x.asInstanceOf[$asttype]
+    |    case e:NoSuccess => throw new java.lang.Error(s"Can't parse $refname\\n$$e")
+    |  }
+    |} 
+    |
+    |""".stripMargin.format(refname)
+  def translatePattern(implicit translator: Translator) = mainFunctions(s"| $varname")+(s"""|
+    |def $varname:Parser[$asttype] = parse_variable("$astname") ^^{
+    |  case v:Variable_Pattern => {
+    |    val astvar = $astname.variable(v.name)
+    |    astvar.pos = v.pos
+    |    astvar
+    |  }
+    |}
+    |
+    |""".stripMargin)
 }
 
 class IgnoreStatementT(val obj: IgnoreStatement) extends AnyVal {
@@ -172,16 +204,40 @@ class RuleStatementT(val obj: RuleStatement) extends AnyVal {
   import Util._
   def name(implicit translator: Translator) = obj.name.translate
   def sequence(implicit translator: Translator) = obj.sequence.list.map(_.translate).join(" ~ ")
+  def aastPackage(implicit translator: Translator) = translator.properties.astAbstractPackage.get
+  def abstractPackageName(implicit translator: Translator) = translator.pkg + "." + translator.properties.astAbstractPackage.get
+
+  def asttype(implicit translator: Translator) = if (translator.properties.astAdvanced.get) s"$aastPackage.$astname" else astname
   def astname(implicit translator: Translator) = name.astname
   def refname(implicit translator: Translator) = name.refname
   def parserPattern(implicit translator: Translator) = obj.sequence.list.map(_.parserPattern).join(" ~ ")
   def casePattern(implicit translator: Translator) = obj.sequence.list.map(_.casePattern).join(" ~ ")
   def arguments(implicit translator: Translator) = obj.sequence.list.map(_.argument).join(", ")
-  def translate(implicit translator: Translator) = s"""|def %-18s : Parser[$astname] = positioned(
-       |  $parserPattern ^^ {
-       |  case $casePattern => $astname($arguments)
-       |})
-       |""".stripMargin.format(refname)
+  def varname = obj.name.value.refname+"_var"
+  
+  def translate(implicit translator: Translator) = mainFunctions("")
+  def mainFunctions(varparsing:String)(implicit translator: Translator) = s"""|def %-18s : Parser[$asttype] = positioned(
+    |  $parserPattern ^^ {
+    |  case $casePattern => $astname($arguments)
+    |}) $varparsing
+    |
+    |def parse_$refname(txt:String):$asttype ={
+    |  phrase($refname)(new CharArrayReader(txt.toArray)) match{
+    |    case Success(x,_)=>x.asInstanceOf[$asttype]
+    |    case e:NoSuccess => throw new java.lang.Error(s"Can't parse $refname\\n$$e")
+    |  }
+    |}
+    |""".stripMargin.format(refname)
+  def translatePattern(implicit translator: Translator) = mainFunctions(s"| $varname")+(s"""|
+    |def $varname:Parser[$asttype] = parse_variable("$astname") ^^{
+    |  case v:Variable_Pattern => {
+    |    val astvar = $astname.variable(v.name)
+    |    astvar.pos = v.pos
+    |    astvar
+    |  }
+    |}
+    |
+    |""".stripMargin)
 }
 
 class RuleElementT(val obj: RuleElement) extends AnyVal {
@@ -349,17 +405,41 @@ class BinaryStatementT(val obj: BinaryStatement) extends AnyVal {
   def refname(implicit translator: Translator) = name.refname
   def pattern(implicit translator: Translator) = s"$operandRefname ~ rep(($patternSequence) ~ $operandRefname)"
   def binaryCases(implicit translator: Translator) = obj.sequence.list.map(_.binaryCase).join("\n")
-  def translate(implicit translator: Translator) = s"""|def %-18s = positioned($pattern ^^ {
+  def asttype(implicit translator: Translator) = if (translator.properties.astAdvanced.get) translator.properties.astAbstractPackage.get + "." + astname else astname
+  def aastPackage(implicit translator: Translator) = translator.properties.astAbstractPackage.get
+  def varname = obj.name.value.refname+"_var"
+  
+  def translate(implicit translator: Translator) = mainFunctions("")
+  def mainFunctions(varparsing:String)(implicit translator: Translator) = s"""|def %-18s = positioned($pattern ^^ {
     |  arg => {
     |    val (first ~ list) = arg
     |    list.foldLeft($astname(first)){
-    |      (left: $astname, oright) => oright match{
+    |      (left: $asttype, oright) => oright match{
     |$binaryCases
     |      }
     |    }
     |  }
-    |})
+    |}) $varparsing
+    |
+    |def parse_$refname(txt:String):$asttype ={
+    |  phrase($refname)(new CharArrayReader(txt.toArray)) match{
+    |    case Success(x,_)=>x.asInstanceOf[$asttype]
+    |    case e:NoSuccess => throw new java.lang.Error(s"Can't parse $refname\\n$$e")
+    |  }
+    |}
+    |
     |""".stripMargin.format(refname)
+  
+  def translatePattern(implicit translator: Translator) = mainFunctions(s"| $varname")+(s"""|
+    |def $varname:Parser[$asttype] = parse_variable("$astname") ^^{
+    |  case v:Variable_Pattern => {
+    |    val astvar = $astname.variable(v.name)
+    |    astvar.pos = v.pos
+    |    astvar
+    |  }
+    |}
+    |
+    |""".stripMargin)
 }
 
 class GroupStatementT(val obj: GroupStatement) extends AnyVal {
@@ -369,12 +449,36 @@ class GroupStatementT(val obj: GroupStatement) extends AnyVal {
   def astname(implicit translator: Translator) = name.astname
   def cname(implicit translator: Translator) = name.cname
   def refname(implicit translator: Translator) = name.refname
+  def asttype(implicit translator: Translator) = if (translator.properties.astAdvanced.get) translator.properties.astAbstractPackage.get + "." + astname else astname
 
-  def translate(implicit translator: Translator) = """|def %-18s = positioned(
+  def varname = obj.name.value.refname+"_var"
+  def mainFunctions(varparsing:String)(implicit translator: Translator) = s"""|def %-18s = positioned(
     |                           %s
-    |                         )
+    |                         ) $varparsing
+    |
+    |def parse_$refname(txt:String):$asttype ={
+    |  phrase($refname)(new CharArrayReader(txt.toArray)) match{
+    |    case Success(x,_)=>x.asInstanceOf[$asttype]
+    |    case e:NoSuccess => throw new java.lang.Error(s"Can't parse $refname\\n$$e")
+    |  }
+    |}
+    |
     |""".stripMargin.format(refname,insideGroup)
 
+  
+  def translate(implicit translator: Translator) = mainFunctions("")
+  
+  def translatePattern(implicit translator: Translator) = mainFunctions(s"| $varname")+(s"""|
+    |def $varname:Parser[$asttype] = parse_variable("$astname") ^^{
+    |  case v:Variable_Pattern => {
+    |    val astvar = $astname.variable(v.name)
+    |    astvar.pos = v.pos
+    |    astvar
+    |  }
+    |}
+    |
+    |""".stripMargin)
+  
   def insideGroup(implicit translator: Translator) = {referencedGroupMembers.map(_.identifier.get.insideGroup(astname)).join(" |\n                           ")}
 
   def referencedGroupMembers(implicit translator: Translator) = {
@@ -403,22 +507,32 @@ class StatementT(val obj: Statement) extends AnyVal {
 class MainT(val obj: Main) extends AnyVal {
   import Util._
   def sequence(implicit translator: Translator) = obj.sequence.list.map(_.translate.indent).join("\n")
-  def pkg(implicit translator: Translator) = translator.pkg  
+  def mypackage(implicit translator: Translator) = translator.mypackage
+  def pkg(implicit translator: Translator) = translator.pkg
+  def astImports(implicit translator: Translator) = if (translator.properties.astAdvanced.get){
+    val factoryPackage = translator.properties.astFactoryPackage.get
+    val mainPackage = translator.properties.astMainPackage.get
+    val aastPackage = translator.properties.astAbstractPackage.get
+    s"""|import $pkg.$factoryPackage._
+    |import $pkg.$aastPackage
+    |""".stripMargin
+  } else "import $pkg.$mainPackage._"
   def q = "\"\"\""
   def ignores(implicit translator: Translator) = {
     val ig = for(statement <- obj.sequence.list; ignore <- statement.ignoreStatement) yield s"(${ignore.pattern})"
     ig.join("|")
-  } 
-  def translate(implicit translator: Translator) = s"""package $pkg.parser
+  }
+  def translate(implicit translator: Translator) = s"""package $mypackage
 
 import java.io.File
 import org.apache.commons.io.FileUtils.readFileToString
-import $pkg.ast._
 import scala.Responder
 import scala.util.parsing.combinator.RegexParsers
 import util.parsing.input.CharArrayReader
 import eu.lateral.nomic.ASTObjects
+$astImports
 
+${translator.variableClass}  
 object Parser extends RegexParsers{
   override def skipWhitespace = true
   override val whiteSpace = $q$ignores$q.r
@@ -444,18 +558,29 @@ $sequence
     apply(txt)
   }
 
+${translator.variableParser}
   implicit def convert_option[T](input:Option[AnyRef]):Option[T] = input.map(_.asInstanceOf[T])
 
   implicit def convert_list[T,Elem<:ASTObjects.ASTObject](input:List[AnyRef]):ASTObjects.AList[Elem] = {
     new ASTObjects.AList(input.map(_.asInstanceOf[Elem]))
   }
-}""".stripMargin
+}
+""".stripMargin
 
 }
 
-class ParserTranslator extends MenoTranslatorBase {
+class ParserTranslator extends MenoTranslatorBase{
+  def mypackage = pkg
+  def variableClass = ""
+  def variableParser = ""
+}
+
+class SimpleParserTranslator extends ParserTranslator {
   import Util._
   implicit def translator: Translator = this
+
+  override def mypackage = pkg + "." + properties.parserPackage
+  
 
   override def apply(obj: Any): String = obj match {
     case x: ASTString => x.translate
@@ -487,3 +612,58 @@ class ParserTranslator extends MenoTranslatorBase {
   }
 }
 
+class PatternParserTranslator extends ParserTranslator {
+  import Util._
+  implicit def translator: Translator = this
+
+  override def mypackage = pkg + "." + properties.patternParserPackage
+  override def variableClass = "case class Variable_Pattern(name:String) extends scala.util.parsing.input.Positional\n"
+  override def variableParser = {
+    def pattern(text:String)= if (text=="") "" else '\"' + text +'\"'
+    def addPattern(text:String)=if (text=="") "" else s"~ $text"
+    def matcher(text:String)= if (text=="") "" else s"_"
+    def addMatcher(text:String)=if (text=="") "" else s"~ _"
+    val prefix = pattern(properties.patternParserVariablePrefix.get.trim)
+    val postfix = addPattern(pattern(properties.patternParserVariablePostfix.get.trim))
+    val separator = addPattern(pattern(properties.patternParserVariableTypeSeperator.get.trim))
+    val prefixMatcher = matcher(properties.patternParserVariablePrefix.get.trim)
+    val postfixMatcher = addMatcher(matcher(properties.patternParserVariablePostfix.get.trim))
+    val separatorMatcher = addMatcher(matcher(properties.patternParserVariableTypeSeperator.get.trim))
+    
+    s"""|def parse_variable(classname:String):Parser[Variable_Pattern] = positioned(
+    |  ($prefix ~ regex("[a-zA-Z_][a-zA-Z0-9_]*"r) $separator $postfix ~ classname) ^^ {
+    |    case $prefixMatcher ~ name $separatorMatcher ~ _ $postfixMatcher => Variable_Pattern(name)
+    |  }
+    |)  
+    |""".stripMargin.indent
+  }
+  
+  override def apply(obj: Any): String = obj match {
+    case x: ASTString => x.translate
+    case x: ASTRegex => x.translate
+    case x: Identifier => x.translate
+    case x: NamedObject => x.translate
+    case x: ClassGenerator => x.translate
+    case x: KeywordStatement => x.translate
+    case x: KeywordParameters => x.translate
+    case x: StringRegex => x.translate
+    case x: TokenStatement => x.translatePattern
+    case x: IgnoreStatement => x.translate
+    case x: RuleStatement => x.translatePattern
+    case x: RuleElement => x.translate
+    case x: Register => x.translate
+    case x: StringRuleElement => x.translate
+    case x: PatternRuleElement => x.translate
+    case x: ElementReference => x.translate
+    case x: SplitBy => x.translate
+    case x: OneOrMore => x.translate
+    case x: More => x.translate
+    case x: Multiplicity => x.translate
+    case x: BinaryStatement => x.translatePattern
+    case x: GroupStatement => x.translatePattern
+    case x: Statement => x.translate
+    case x: Main => x.translate
+
+    case _ => obj.toString
+  }
+}

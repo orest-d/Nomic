@@ -23,89 +23,88 @@ object Implicits {
 
 trait IContext {
   def getTyped[T: ClassManifest](name: String): Option[T]
-  def getUnifiable(name: String): Option[Unifiable]
+  def get(name: String): Option[Unifiable]
 }
 
-case class Context(data: Map[String, Any] = Map.empty[String, Any]) extends Map[String, Any] with IContext {
-  def get(key: String) = data.get(key)
+case class Context(data: Map[String, Unifiable] = Map.empty[String, Unifiable]) extends Map[String, Unifiable] with IContext {
+  def get(key: String): Option[Unifiable] = data.get(key)
   def iterator = data.iterator
-  def + [B1 >: Any](kv: (String, B1)) = Context(data + kv)
+  def getResolved(key: String): Option[Unifiable] = data.get(key).flatMap {
+    case v: Variable => v.get_bound(this)
+    case x: Unifiable => Some(x)
+  }
+  def +[B1 >: Unifiable](kv: (String, B1)) = {
+    val kv1: (String, Unifiable) = (kv._1, kv._2.asInstanceOf[Unifiable])
+    Context(data + kv1)
+  }
   def -(key: String) = Context(data - key)
   def getTyped[T: ClassManifest](name: String): Option[T] = {
     data.get(name).flatMap(x => if (classManifest[T].erasure isAssignableFrom x.getClass) Some(x.asInstanceOf[T]) else None)
   }
-  def getUnifiable(name: String): Option[Unifiable] = {
-    data.get(name).flatMap(x => if (classOf[Unifiable] isAssignableFrom x.getClass) Some(x.asInstanceOf[Unifiable]) else None)
-  }
+  val success = Success(this)
 }
 
 trait Unifiable {
-  def unify(u: Unifiable, c: Context): Result
-  def get_bound(c: Context): Option[Unifiable] = Some(this)
-  //  def get_leaf(c:Context):Unifiable = this
+  def unify(u: Unifiable, context: Context): Result
+  def get_bound(context: Context): Option[Unifiable] = Some(this)
 }
 
 trait Variable extends Unifiable {
   def variable_name: String
-  override def get_bound(c: Context): Option[Unifiable] = c.getUnifiable(variable_name).flatMap(_.get_bound(c))
+  override def get_bound(context: Context): Option[Unifiable] = context.get(variable_name).flatMap(_.get_bound(context))
 
-  //override def get_leaf(c:Context):Unifiable = c.getUnifiable(variable_name).map(_.get_leaf(c)).getOrElse(this)
-
-  def unify(u: Unifiable, c: Context) = {
-
-    val me = get_bound(c)
-    val other = u.get_bound(c)
-    if (me.isDefined) {
-      if (other.isDefined) {
-        me.get.unify(other.get, c)
-      } else {
-        u.unify(me.get, c)
-      }
+  def unify(u: Unifiable, context: Context) = {
+    if (u == this) {
+      context.success
     } else {
-      Success(c + (variable_name -> u))
+      val me = get_bound(context)
+      if (me.isDefined) {
+        val other = u.get_bound(context)
+        if (other.isDefined) {
+          me.get.unify(other.get, context)
+        } else {
+          u.unify(me.get, context)
+        }
+      } else {
+        Success(context + (variable_name -> u))
+      }
     }
-
   }
-
 }
 
-case class SimpleVariable(variable_name:String) extends Variable
-case class SimpleUnifiable[T](value:T) extends Unifiable{
-  def unify(u: Unifiable, c: Context): Result = u match{
-    case SimpleUnifiable(x) => if (u == x) SimpleSuccess else Fail
-    case v:Variable => v.unify(u,c)
-  }  
+case class SimpleVariable(variable_name: String) extends Variable
+case class SimpleUnifiable[T](value: T) extends Unifiable {
+  def unify(u: Unifiable, context: Context): Result = {
+    u match {
+      case v: Variable => v.unify(this, context)
+      case SimpleUnifiable(x) => if (value == x) context.success else Fail
+    }
+  }
 }
 
 sealed abstract class Result {
   def map(f: Context => Context): Result
   def flatMap(f: Context => Result): Result
-  def status: String
+  def filter(f: Context => Boolean): Result
   def contexts: Stream[Context]
+  def success: Boolean
 }
 
 case object Fail extends Result {
   override def map(f: Context => Context) = this
   override def flatMap(f: Context => Result) = this
-  def status: String = "Fail"
+  def filter(f: Context => Boolean) = this
   def contexts: Stream[Context] = Stream.empty[Context]
-}
-
-case class UnificationError(exception: Throwable) extends Result {
-  override def map(f: Context => Context) = this
-  override def flatMap(f: Context => Result) = this
-  def status: String = "ERROR: " + exception.getMessage
-  def contexts: Stream[Context] = Stream.empty[Context]
+  def success = false
 }
 
 case class Success(context: Context = new Context) extends Result {
   override def map(f: Context => Context) = Success(f(context))
   override def flatMap(f: Context => Result) = f(context)
-  def status: String = "Success"
+  def filter(f: Context => Boolean) = if (f(context)) this else Fail
   def contexts: Stream[Context] = context #:: Stream.empty[Context]
+  def success = true
 }
-
-object SimpleSuccess extends Success
 
 class OrResult(val first: Context)(next: => Result) extends Result {
   def second = next
@@ -113,7 +112,6 @@ class OrResult(val first: Context)(next: => Result) extends Result {
   override def flatMap(f: Context => Result): Result = {
     f(first) match {
       case Fail => second.flatMap(f)
-      case err: UnificationError => err
       case Success(c) => new OrResult(c)(second.flatMap(f))
       case o: OrResult => {
         def n = {
@@ -124,7 +122,64 @@ class OrResult(val first: Context)(next: => Result) extends Result {
       }
     }
   }
-  def status: String = "Success"
+  def filter(f: Context => Boolean) = {
+    if (f(first))
+      new OrResult(first)(next.filter(f))
+    else
+      next.filter(f)
+  }
   def contexts: Stream[Context] = first #:: second.contexts
+  def success = true
 }
 
+object Unify {
+  def unify(a: Unifiable, b: Unifiable, context: Context): Result = {
+    a.get_bound(context).getOrElse(a).unify(b.get_bound(context).getOrElse(b), context)
+  }
+  def unifyLists(a: List[Unifiable], b: List[Unifiable], context: Context): Result = {
+    a match {
+      case ahead :: atail => {
+        b match {
+          case bhead :: btail => {
+            for (
+              c1 <- ahead.unify(bhead, context);
+              c2 <- unifyLists(atail, btail, c1)
+            ) yield c2
+        }
+            case Nil => Fail
+          }
+      }
+      case Nil => {
+        b match {
+          case Nil => context.success
+          case _ => Fail
+        }
+      }
+    }
+  }
+  
+  def unifyOptions(a: Option[Unifiable], b: Option[Unifiable], context: Context): Result = {
+    a match{
+      case Some(x) => {
+          b match{
+            case Some(y) => unify(x,y,context)
+            case None => Fail
+          }
+      }
+      case None =>{
+          b match{
+            case None => context.success
+            case _ => Fail
+          }          
+      }
+    }
+  }
+
+  def unifyBooleans(a: Boolean, b: Boolean, context: Context): Result = {
+    if (a==b)
+      context.success
+    else
+      Fail
+  }
+  
+}

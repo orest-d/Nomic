@@ -131,7 +131,7 @@ class ProjectParameters extends EmptyProjectParameters {
   def scalaSourcesDir = register("scala.sources", ()=>(new File(new File(new File(projectDir, "src"), "main"), "scala")).getPath, "Path to the scala sources")
   def scalaSourcesBaseFile = new File(scalaSourcesDir)
   def scalaPackageSourcesFile = projectPackageVector.foldLeft(scalaSourcesBaseFile) { (total, item) => new File(total, item) }
-  val scalaPackageSourcesDir = scalaPackageSourcesFile.getAbsolutePath() 
+  def scalaPackageSourcesDir = scalaPackageSourcesFile.getAbsolutePath() 
 
   val generateEvaluator=register("generate.evaluator", true, "decides if evaluator will be generated")
   val generateOT=register("generate.ot", false, "this is an obsolete functionality")
@@ -140,6 +140,12 @@ class ProjectParameters extends EmptyProjectParameters {
   val astMainPackage=register("ast.main.package","ast","package name for AST nodes (value classes)")
   val astAbstractPackage=register("ast.abstract.package",()=>if (astAdvanced.get) "aast" else "ast","package name for abstract AST nodes (only applies if ast.advanced is true)")
   val astProxyPackage=register("ast.proxy.package",()=>if (astAdvanced.get) "astproxy" else "ast","package name for proxy AST nodes (only applies if ast.advanced is true)")
+  val astFactoryPackage=register("ast.factory.package",()=>if (astAdvanced.get) "astfactory" else "ast","package name for AST factory/singletons (only applies if ast.advanced is true)")
+  val parserPackage=register("parser.package","parser","parser package name")
+  val patternParserPackage=register("patternparser.package","patternparser","pattern parser package name (only applies if ast.advanced is true)")
+  val patternParserVariablePrefix=register("patternparser.variable.prefix","$","beginning of the variable pattern")
+  val patternParserVariablePostfix=register("patternparser.variable.postfix","","end of the variable pattern")
+  val patternParserVariableTypeSeperator=register("patternparser.variable.typeseparator",":","string separating the variable name from its type in pattern parser variables")
 }
 
 object ProjectParameters{

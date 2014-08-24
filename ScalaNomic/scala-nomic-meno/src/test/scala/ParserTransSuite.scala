@@ -34,7 +34,7 @@ class ParserTransSuite {
       rule       main(expression)
       """
     val ast = Parser(src)
-    val trans = new ParserTranslator    
+    val trans = new SimpleParserTranslator    
     val translated = trans(ast) 
     assert(ast.toString.contains("Binary"))
     assert(translated.contains("number ~ rep((plus | minus) ~ number"))
@@ -52,7 +52,7 @@ class ParserTransSuite {
       """
     val ast = Parser(src).asInstanceOf[Main]
     val rec = ast.sequence.list(3)
-    val trans = new ParserTranslator    
+    val trans = new SimpleParserTranslator    
     val translated = trans(rec) 
     assert(ast.toString.contains("Rec"))    
     assert(rec.toString.contains("Rec"))

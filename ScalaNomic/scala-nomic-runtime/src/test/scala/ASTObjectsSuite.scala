@@ -18,6 +18,7 @@ This file is part of Scala Nomic Runtime.
 import org.scalatest.Assertions
 import org.junit.Test
 import eu.lateral.nomic.ASTObjects._
+import eu.lateral.nomic.unify.Context
 
 class ASTObjectsSuite extends Assertions {
   @Test def testLiteral() {
@@ -99,4 +100,70 @@ class ASTObjectsSuite extends Assertions {
     assert(obj.get_bottomUp(1) === b)
     assert(obj.get_bottomUp(2) === obj)
   }
+
+  @Test def testASTVariable1() {
+    val v = new AbstractLiteral with ASTVariable{
+      def literal:String = throw new Error("Getter literal undefined in an ASTVariable")
+      def proxy_class = classOf[AbstractLiteral]
+      def variable_name = "v"
+    }
+    val a = new Literal("a")
+    val b = new ASTObject
+    
+    val resA = v.unify(a,Context())
+    assert(resA.success === true)
+    assert(resA.contexts.head("v") === a)
+    val resB = v.unify(b,Context())
+    assert(resB.success === false)
+  }
+
+  @Test def testASTVariable2() {
+    val v = new AbstractLiteral with ASTVariable{
+      def literal:String = throw new Error("Getter literal undefined in an ASTVariable")
+      def proxy_class = classOf[AbstractLiteral]
+      def variable_name = "v"
+    }
+    val a = new Literal("a")
+    val b = new ASTObject
+    
+    val resA = a.unify(v,Context())
+    assert(resA.success === true)
+    assert(resA.contexts.head("v") === a)
+    val resB = b.unify(v,Context())
+    assert(resB.success === false)
+  }
+
+  @Test def testASTVariableBound1() {
+    val v = new AbstractLiteral with ASTVariable{
+      def literal:String = throw new Error("Getter literal undefined in an ASTVariable")
+      def proxy_class = classOf[AbstractLiteral]
+      def variable_name = "v"
+    }    
+    val a = new Literal("a")    
+    val b = new Literal("b")
+    
+    val resA = v.unify(a,Context() + ("v" -> a))
+    assert(resA.success === true)
+    assert(resA.contexts.head("v") === a)
+    
+    val resB = v.unify(b,Context() + ("v" -> a))
+    assert(resB.success === false)
+  }
+
+  @Test def testASTVariableBound2() {
+    val v = new AbstractLiteral with ASTVariable{
+      def literal:String = throw new Error("Getter literal undefined in an ASTVariable")
+      def proxy_class = classOf[AbstractLiteral]
+      def variable_name = "v"
+    }    
+    val a = new Literal("a")    
+    val b = new Literal("b")
+    
+    val resA = a.unify(v,Context() + ("v" -> a))
+    assert(resA.success === true)
+    assert(resA.contexts.head("v") === a)
+    
+    val resB = b.unify(v,Context() + ("v" -> a))
+    assert(resB.success === false)
+  }  
 }
